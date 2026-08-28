@@ -27,11 +27,14 @@ interface Props {
   units?: UnitOut[]
   requests?: RequestOut[]
   center: [number, number]
+  onSelectCell?: (id: number) => void
 }
 
-export function MapView({ riskCells, units, requests, center }: Props) {
+export function MapView({ riskCells, units, requests, center, onSelectCell }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
+  const onSelectCellRef = useRef(onSelectCell)
+  onSelectCellRef.current = onSelectCell
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -64,6 +67,17 @@ export function MapView({ riskCells, units, requests, center }: Props) {
             "#34505C",
           ],
         },
+      })
+      map.on("mouseenter", "risk-cells-fill", () => {
+        map.getCanvas().style.cursor = "pointer"
+      })
+      map.on("mouseleave", "risk-cells-fill", () => {
+        map.getCanvas().style.cursor = ""
+      })
+      map.on("click", "risk-cells-fill", (e) => {
+        const feature = e.features?.[0]
+        const id = feature?.properties?.id
+        if (typeof id === "number" && onSelectCellRef.current) onSelectCellRef.current(id)
       })
 
       map.addSource("units", { type: "geojson", data: EMPTY_FC })

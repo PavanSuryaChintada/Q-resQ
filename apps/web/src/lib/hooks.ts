@@ -5,6 +5,14 @@ export function useRiskCells() {
   return useQuery({ queryKey: ["risk-cells"], queryFn: api.riskCells })
 }
 
+export function useRiskCellDetail(id: number | null) {
+  return useQuery({
+    queryKey: ["risk-cell", id],
+    queryFn: () => api.riskCell(id as number),
+    enabled: id !== null,
+  })
+}
+
 export function useRequests(status?: string) {
   return useQuery({ queryKey: ["requests", status], queryFn: () => api.requests(status), refetchInterval: 4000 })
 }
