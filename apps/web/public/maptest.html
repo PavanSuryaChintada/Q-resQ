@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>MapLibre isolation test</title>
+  <link href="https://unpkg.com/maplibre-gl@6.6.0/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
+    #status { position: absolute; top: 8px; left: 8px; z-index: 10; background: white; padding: 8px; font-family: monospace; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="status">loading...</div>
+  <div id="map"></div>
+  <script src="https://unpkg.com/maplibre-gl@6.6.0/dist/maplibre-gl.js"></script>
+  <script>
+    const status = document.getElementById('status');
+    const log = (msg) => { status.textContent = msg; console.log('[maptest]', msg); };
+
+    log('creating map...');
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: {
+        version: 8,
+        sources: {
+          osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256 }
+        },
+        layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+      },
+      center: [83.9, 18.325],
+      zoom: 11,
+    });
+
+    map.on('error', (e) => log('ERROR: ' + (e.error?.message || JSON.stringify(e))));
+
+    map.on('load', () => {
+      log('map loaded, adding red circle...');
+      try {
+        map.addSource('dot', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [83.9, 18.325] }, properties: {} }] }
+        });
+        map.addLayer({
+          id: 'dot-circle',
+          type: 'circle',
+          source: 'dot',
+          paint: { 'circle-radius': 40, 'circle-color': '#ff0000', 'circle-opacity': 1 }
+        });
+        log('DONE - red circle added at map center. If you see it, MapLibre works fine here.');
+      } catch (err) {
+        log('THREW: ' + err.message);
+      }
+    });
+  </script>
+</body>
+</html>
