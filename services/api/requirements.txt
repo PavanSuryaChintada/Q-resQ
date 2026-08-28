@@ -18,3 +18,7 @@ ortools==9.11.4210
 qiskit==1.2.4
 qiskit-aer==0.15.1
 qiskit-optimization==0.6.1
+
+# sibling package in this monorepo (packages/qubo-dispatch), not an
+# external dependency - the dispatch engine itself
+-e ../../packages/qubo-dispatch[quantum,classical]
