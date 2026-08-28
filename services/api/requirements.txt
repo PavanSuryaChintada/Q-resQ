@@ -12,6 +12,16 @@ lightgbm==4.5.0
 scikit-learn==1.6.0
 rasterio==1.4.3
 pysheds==0.4
+# pysheds==0.4 predates NEP 50 and calls np.can_cast() on plain Python
+# int/float nodata markers internally (its default flowdir flats=-1,
+# pits=-2 args) - numpy>=2.0 raises TypeError there. pysheds declares
+# no numpy upper bound; pin one here. Verified the rest of the stack
+# (qiskit/ortools/scikit-learn/pandas) still passes with numpy<2.
+numpy<2.0
+# not in the original pin list: build_grid()'s documented return type
+# is a GeoDataFrame (risk/terrain.py), and dist_to_stream() needs it
+# for projected-CRS distance calculations. osmnx also depends on it.
+geopandas
 osmnx==2.0.1
 networkx==3.4.2
 ortools==9.11.4210

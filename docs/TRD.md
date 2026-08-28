@@ -381,6 +381,10 @@ lightgbm==4.5.0
 scikit-learn==1.6.0
 rasterio==1.4.3
 pysheds==0.4
+numpy<2.0        # pysheds==0.4 predates NEP 50; numpy>=2.0 breaks its
+                  # internal np.can_cast() calls on plain-int nodata markers
+geopandas         # build_grid()'s GeoDataFrame return type, dist_to_stream();
+                  # also an osmnx dependency
 osmnx==2.0.1
 networkx==3.4.2
 ortools==9.11.4210
@@ -390,5 +394,7 @@ qiskit-optimization==0.6.1
 ```
 
 Qiskit and GDAL are the two things that will eat your night. Set both up in hour 1–2, in a Docker or conda environment, and commit the lockfile before writing a line of feature code.
+
+**Update, verified on this build:** modern Windows wheels made GDAL/rasterio/pysheds/geopandas installs painless — no Docker or conda needed. The one real snag was pysheds==0.4 vs numpy>=2.0 (see the `numpy<2.0` pin above); nothing else in the stack objected to the downgrade.
 
 Deploy: FastAPI → Railway, web → Vercel, DB → Supabase. All three green and empty before hour 2.
