@@ -7,7 +7,10 @@ import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import LineString, Point
 
-from risk.terrain import _slope_from_array, build_grid, compute_hand, compute_slope, compute_twi, dist_to_stream
+from risk.terrain import (
+    _slope_from_array, build_grid, compute_hand, compute_slope, compute_stream_distance,
+    compute_twi, dist_to_stream,
+)
 
 
 def _write_synthetic_dem(path, dem: np.ndarray, px_size_deg: float = 0.001,
@@ -98,6 +101,22 @@ def test_compute_twi_is_finite_and_increases_downslope_with_accumulation(tmp_pat
     interior_col = twi[1:-1, 5]
     assert np.all(np.isfinite(interior_col))
     assert np.all(np.diff(interior_col) > 0)  # strictly increasing downslope
+
+
+def test_compute_stream_distance_is_zero_on_stream_cells_and_grows_away_from_them(tmp_path):
+    size = 12
+    dem = np.array([[float(size - i) for _ in range(size)] for i in range(size)], dtype="float32")
+    dem_path = tmp_path / "valley.tif"
+    _write_synthetic_dem(dem_path, dem)
+
+    dist = compute_stream_distance(str(dem_path), stream_accumulation_threshold=10.0)
+
+    assert dist.shape == (size, size)
+    assert np.all(dist[~np.isnan(dist)] >= 0.0)
+    # row 10 is the interior stream row (see the HAND test above) -
+    # distance there should be ~0, and further rows away should be larger
+    assert np.allclose(dist[10, 1:-1], 0.0, atol=1e-6)
+    assert dist[5, 5] > dist[9, 5]
 
 
 def test_build_grid_covers_the_bbox_at_the_requested_resolution():

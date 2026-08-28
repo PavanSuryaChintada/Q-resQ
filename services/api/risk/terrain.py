@@ -11,6 +11,7 @@ import geopandas as gpd
 import numpy as np
 import rasterio
 from pysheds.grid import Grid
+from scipy.ndimage import distance_transform_edt
 from shapely.geometry import box
 
 _METERS_PER_DEGREE_LAT = 111_320.0
@@ -75,6 +76,36 @@ def compute_twi(dem_path: str) -> np.ndarray:
     tan_slope_safe = np.where(tan_slope < 1e-6, 1e-6, tan_slope)  # flat cells: avoid /0
 
     return np.log(np.maximum(upslope_area, 1.0) / tan_slope_safe)
+
+
+def compute_stream_distance(dem_path: str, stream_accumulation_threshold: float = 1000.0) -> np.ndarray:
+    """Distance in metres to the nearest stream cell, derived straight
+    from the DEM's own flow accumulation - no OSM waterway data
+    needed. Reuses the same conditioning + accumulation pipeline as
+    compute_hand, since both need the same stream definition.
+    """
+    grid = Grid.from_raster(dem_path)
+    dem = grid.read_raster(dem_path)
+
+    pit_filled = grid.fill_pits(dem)
+    flooded = grid.fill_depressions(pit_filled)
+    inflated = grid.resolve_flats(flooded)
+
+    fdir = grid.flowdir(inflated)
+    acc = np.asarray(grid.accumulation(fdir))
+    stream_mask = acc > stream_accumulation_threshold
+
+    with rasterio.open(dem_path) as dataset:
+        transform = dataset.transform
+        mean_lat_deg = (dataset.bounds.top + dataset.bounds.bottom) / 2.0
+    meters_per_deg_lon = _METERS_PER_DEGREE_LAT * math.cos(math.radians(mean_lat_deg))
+    px_size_x_m = abs(transform.a) * meters_per_deg_lon
+    px_size_y_m = abs(transform.e) * _METERS_PER_DEGREE_LAT
+    px_size_m = (px_size_x_m + px_size_y_m) / 2.0  # near-square at this scale
+
+    if not stream_mask.any():
+        return np.full(stream_mask.shape, np.nan)
+    return distance_transform_edt(~stream_mask) * px_size_m
 
 
 def build_grid(bbox: tuple[float, float, float, float], cell_m: float = 250.0) -> gpd.GeoDataFrame:

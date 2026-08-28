@@ -1,0 +1,13 @@
+# Data ingest layer (services/api/ingest/). Separate from
+# requirements.txt (the app's pinned stack) since these scripts run
+# standalone, independent of the FastAPI service.
+pystac-client
+planetary-computer
+rasterio
+xarray
+rioxarray
+geopandas
+osmnx
+requests
+pandas
+pyarrow  # for DataFrame.to_parquet in ingest/rainfall.py

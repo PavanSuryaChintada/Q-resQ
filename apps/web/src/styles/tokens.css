@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  /* Ground - cool chart slate. Lifted off pure black on purpose. */
+  --color-ground-000: #101a1e;
+  --color-ground-100: #17242a;
+  --color-ground-200: #1e2f36;
+  --color-ground-300: #263b44;
+  --color-ground-400: #34505c;
+
+  /* Ink - warm bone on cool ground */
+  --color-ink-000: #f0ebe1;
+  --color-ink-100: #c9c3b8;
+  --color-ink-200: #9a968d;
+  --color-ink-300: #6b6862;
+
+  /* Severity - IMD warning ladder. Data only, never chrome. */
+  --color-sev-0: #4a5d52;
+  --color-sev-1: #c9a227;
+  --color-sev-2: #d97b1f;
+  --color-sev-3: #c23b22;
+  --color-sev-4: #7a1e14;
+
+  --color-state-ok: #5c8a6e;
+  --color-state-warn: #c9a227;
+  --color-state-err: #c23b22;
+
+  --font-display: "IBM Plex Sans Condensed", sans-serif;
+  --font-body: "IBM Plex Sans", sans-serif;
+  --font-data: "IBM Plex Mono", monospace;
+
+  --radius-DEFAULT: 2px;
+  --radius-none: 0px;
+}
+
+body {
+  background: var(--color-ground-000);
+  color: var(--color-ink-100);
+  font-family: var(--font-body);
+}
+
+* {
+  border-radius: 0 !important;
+}

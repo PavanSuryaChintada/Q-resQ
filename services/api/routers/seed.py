@@ -23,9 +23,10 @@ from routers.units import _store as units_store
 
 router = APIRouter()
 
-# Srikakulam district bounding box, roughly
-_LAT_RANGE = (18.10, 18.85)
-_LON_RANGE = (83.60, 84.20)
+# matches risk/features.py's DEMO_BBOX, so seeded units/requests land
+# where real computed risk cells actually exist
+_LAT_RANGE = (18.20, 18.45)
+_LON_RANGE = (83.75, 84.05)
 
 _UNIT_LABELS: list[tuple[str, UnitKind, int]] = [
     ("Boat 01", "boat", 6), ("Boat 02", "boat", 6), ("Boat 03", "boat", 6),
