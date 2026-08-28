@@ -8,15 +8,33 @@ interface Props {
   requests: RequestOut[]
   onRequestSelect: (requestId: string) => void
   selectedRequestId: string | null
+  onSwitchView: () => void
 }
 
-export function RequestCarousel({ requests, onRequestSelect, selectedRequestId }: Props) {
+function PanelHeader({ onSwitchView }: { onSwitchView: () => void }) {
+  return (
+    <div className="h-8 flex items-center justify-between px-3 bg-ground-200 border-b border-ground-300 shrink-0">
+      <span className="font-display font-semibold text-[11px] uppercase tracking-[0.12em] text-ink-200">
+        Request queue &middot; carousel
+      </span>
+      <button
+        onClick={onSwitchView}
+        className="h-6 px-2 bg-ground-300 border border-ground-400 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-400"
+      >
+        List view
+      </button>
+    </div>
+  )
+}
+
+export function RequestCarousel({ requests, onRequestSelect, selectedRequestId, onSwitchView }: Props) {
   const [currentIndex, setCurrentIndex] = useState(0)
-  
+
   if (!requests || requests.length === 0) {
     return (
-      <div className="border border-ground-300 bg-ground-100 p-4">
-        <p className="text-[12px] text-ink-300">No requests in queue</p>
+      <div className="flex flex-col h-full">
+        <PanelHeader onSwitchView={onSwitchView} />
+        <p className="text-[12px] text-ink-300 p-4">No open requests. Requests appear here as they arrive.</p>
       </div>
     )
   }
@@ -43,9 +61,11 @@ export function RequestCarousel({ requests, onRequestSelect, selectedRequestId }
   }
 
   return (
-    <div className="border border-ground-300 bg-ground-100 p-4">
+    <div className="flex flex-col h-full overflow-y-auto">
+      <PanelHeader onSwitchView={onSwitchView} />
+      <div className="p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="font-display font-semibold text-[11px] uppercase tracking-[0.12em] text-ink-200">
+        <span className="font-data text-[12px] text-ink-200">
           Request {currentIndex + 1} of {requests.length}
         </span>
         <div className="flex gap-2">
@@ -124,6 +144,7 @@ export function RequestCarousel({ requests, onRequestSelect, selectedRequestId }
             <div>Wait time: {currentRequest.sev_wait?.toFixed(3) || "N/A"}</div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   )

@@ -12,7 +12,12 @@ function bandForSeverity(sev: number | null | undefined): number {
   return 4
 }
 
-export function RequestsPanel({ center }: { center: [number, number] }) {
+interface Props {
+  center: [number, number]
+  onSwitchView: () => void
+}
+
+export function RequestsPanel({ center, onSwitchView }: Props) {
   const { data: requests } = useRequests()
   const createRequest = useCreateRequest()
   const [people, setPeople] = useState(2)
@@ -42,6 +47,13 @@ export function RequestsPanel({ center }: { center: [number, number] }) {
           Request queue
         </span>
         <div className="flex items-center gap-2">
+          <button
+            onClick={onSwitchView}
+            className="h-6 px-2 bg-ground-300 border border-ground-400 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-400"
+          >
+            Carousel view
+          </button>
+          <span className="w-px h-4 bg-ground-400" />
           <select
             className="bg-ground-300 text-ink-000 text-[12px] font-body h-6 px-1 border border-ground-400"
             value={category}

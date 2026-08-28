@@ -9,6 +9,14 @@ interface Props {
   onToggleRoutes: () => void
 }
 
+function GroupLabel({ children }: { children: string }) {
+  return (
+    <span className="font-display text-[10px] uppercase tracking-[0.1em] text-ink-300 mr-1.5">
+      {children}
+    </span>
+  )
+}
+
 export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
   const [backend, setBackend] = useState<Backend>("greedy")
   const solve = useSolveDispatch()
@@ -18,61 +26,76 @@ export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
 
   return (
     <div className="border-t border-ground-300 bg-ground-100">
-      <div className="h-8 flex items-center px-3 bg-ground-200 border-b border-ground-300 gap-2">
+      <div className="h-8 flex items-center px-3 bg-ground-200 border-b border-ground-300">
         <span className="font-display font-semibold text-[11px] uppercase tracking-[0.12em] text-ink-200">
           Dispatch
         </span>
-        <button
-          onClick={() => seed.mutate(30)}
-          disabled={seed.isPending}
-          className="ml-auto h-6 px-2 bg-ground-300 border border-ground-400 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-400 disabled:opacity-50"
-        >
-          {seed.isPending ? "Seeding..." : "Seed Titli"}
-        </button>
-        <button
-          onClick={() => {
-            console.log("Toggle routes clicked, current state:", showRoutes)
-            onToggleRoutes()
-          }}
-          className={`h-6 px-2 text-[11px] font-display uppercase tracking-wide border ${
-            showRoutes 
-              ? "bg-ground-300 border-ground-400 text-ink-000" 
-              : "bg-transparent border-ground-300 text-ink-200 hover:bg-ground-200"
-          }`}
-        >
-          {showRoutes ? "Hide Routes" : "Show Routes"}
-        </button>
-        <select
-          className="bg-ground-300 text-ink-000 text-[12px] font-data h-6 px-1 border border-ground-400"
-          value={backend}
-          onChange={(e) => setBackend(e.target.value as Backend)}
-        >
-          {BACKENDS.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={() => solve.mutate({ backend })}
-          disabled={solve.isPending}
-          className="h-6 px-3 bg-ground-300 border border-ground-400 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-400 disabled:opacity-50"
-        >
-          {solve.isPending ? "Solving..." : "Dispatch"}
-        </button>
-        <button
-          onClick={() =>
-            benchmark.mutate(["greedy", "annealing", "ortools", "qaoa"], { onSuccess: (r) => setRows(r.rows) })
-          }
-          disabled={benchmark.isPending}
-          className="h-6 px-3 bg-transparent border border-ground-300 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-300 disabled:opacity-50"
-        >
-          {benchmark.isPending ? "Benchmarking..." : "Benchmark (incl. qaoa)"}
-        </button>
+      </div>
+
+      <div className="flex items-center flex-wrap gap-x-4 gap-y-2 px-3 py-2">
+        <div className="flex items-center">
+          <GroupLabel>Scenario</GroupLabel>
+          <button
+            onClick={() => seed.mutate(30)}
+            disabled={seed.isPending}
+            className="h-6 px-2 bg-ground-300 border border-ground-400 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-400 disabled:opacity-50"
+          >
+            {seed.isPending ? "Seeding..." : "Seed Titli"}
+          </button>
+        </div>
+
+        <span className="w-px h-5 bg-ground-300" />
+
+        <div className="flex items-center">
+          <GroupLabel>Map</GroupLabel>
+          <button
+            onClick={onToggleRoutes}
+            className={`h-6 px-2 text-[11px] font-display uppercase tracking-wide border ${
+              showRoutes
+                ? "bg-ground-300 border-ground-400 text-ink-000"
+                : "bg-transparent border-ground-300 text-ink-200 hover:bg-ground-200"
+            }`}
+          >
+            {showRoutes ? "Hide routes" : "Show routes"}
+          </button>
+        </div>
+
+        <span className="w-px h-5 bg-ground-300" />
+
+        <div className="flex items-center gap-2">
+          <GroupLabel>Solve</GroupLabel>
+          <select
+            className="bg-ground-300 text-ink-000 text-[12px] font-data h-6 px-1 border border-ground-400"
+            value={backend}
+            onChange={(e) => setBackend(e.target.value as Backend)}
+          >
+            {BACKENDS.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => solve.mutate({ backend })}
+            disabled={solve.isPending}
+            className="h-6 px-3 bg-ground-300 border border-ground-400 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-400 disabled:opacity-50"
+          >
+            {solve.isPending ? "Solving..." : "Dispatch"}
+          </button>
+          <button
+            onClick={() =>
+              benchmark.mutate(["greedy", "annealing", "ortools", "qaoa"], { onSuccess: (r) => setRows(r.rows) })
+            }
+            disabled={benchmark.isPending}
+            className="h-6 px-3 bg-transparent border border-ground-300 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-300 disabled:opacity-50"
+          >
+            {benchmark.isPending ? "Benchmarking..." : "Benchmark (incl. qaoa)"}
+          </button>
+        </div>
       </div>
 
       {solve.data && (
-        <div className="px-3 py-2 text-[12px] font-data text-ink-100 border-b border-ground-300">
+        <div className="px-3 py-2 text-[12px] font-data text-ink-100 border-t border-ground-300">
           round {solve.data.id.slice(0, 8)} · {solve.data.assignments.length} assignments ·{" "}
           {solve.data.backend}
           {solve.data.fell_back ? " (fell back)" : ""} · {solve.data.solve_ms}ms
@@ -80,7 +103,7 @@ export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
       )}
 
       {rows && (
-        <table className="w-full text-[12px] font-data">
+        <table className="w-full text-[12px] font-data border-t border-ground-300">
           <thead className="text-ink-200 text-[10px] uppercase font-display bg-ground-200">
             <tr>
               <th className="text-left px-2 py-1 font-normal">Backend</th>
