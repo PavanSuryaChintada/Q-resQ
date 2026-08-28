@@ -22,7 +22,11 @@ _results: dict[UUID, list[BenchmarkRow]] = {}
 
 @router.post("/run", response_model=BenchmarkRunResult)
 def run_benchmark(payload: BenchmarkRunRequest) -> BenchmarkRunResult:
-    problem = build_current_problem()
+    # capped to CLAUDE.md's target zone size (4 units x 5 requests) so
+    # qaoa can actually run on the comparison, not just fail its own
+    # 24-qubit guard against the whole open queue - highest-severity
+    # subset, same idea as partition.py picks zones by severity total
+    problem = build_current_problem(max_requests=5, max_units=4)
     backends = tuple(payload.backends) if payload.backends else ("qaoa", "annealing", "ortools", "greedy")
 
     raw_rows = qd_benchmark(problem, backends=backends)

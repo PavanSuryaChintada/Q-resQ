@@ -62,3 +62,29 @@ def test_results_can_be_fetched_by_round_id():
 def test_results_404_for_unknown_round_id():
     response = client.get("/benchmark/results", params={"round_id": str(uuid.uuid4())})
     assert response.status_code == 404
+
+
+def test_run_caps_the_problem_so_qaoa_can_actually_run_on_it():
+    # a queue with more than 5 open requests would build an
+    # unpartitioned problem qaoa's 24-qubit guard always rejects -
+    # /benchmark/run must cap to a subset qaoa can actually solve.
+    # benchmark/run never mutates state (unlike dispatch/solve), so
+    # these 8 requests would otherwise sit "open" for the rest of the
+    # test session - save/restore the store like the 422 test does.
+    import routers.requests as requests_router
+    saved = dict(requests_router._store)
+    _free_all_units()
+    try:
+        for _ in range(8):
+            _open_request()
+
+        response = client.post("/benchmark/run", json={"backends": ["qaoa"]})
+
+        assert response.status_code == 200
+        qaoa_row = response.json()["rows"][0]
+        assert qaoa_row["backend"] == "qaoa"
+        assert qaoa_row["constraints_valid"] is True
+        assert qaoa_row["notes"] is None
+    finally:
+        requests_router._store.clear()
+        requests_router._store.update(saved)

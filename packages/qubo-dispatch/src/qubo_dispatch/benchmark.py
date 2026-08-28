@@ -24,13 +24,27 @@ def benchmark(
 
     rows = []
     for backend in backends:
-        solver = _get_solver(backend)
-        result = solver.solve(qubo, problem, timeout_s)
+        try:
+            solver = _get_solver(backend)
+            result = solver.solve(qubo, problem, timeout_s)
+        except KeyboardInterrupt:
+            raise
+        except BaseException as exc:  # noqa: BLE001 - a backend that can't run at this size is a
+            # result to report, not a crash. validate_constraints never
+            # runs on a result that doesn't exist, so this row is
+            # explicitly invalid rather than silently omitted.
+            rows.append({
+                "backend": backend, "objective": None, "solve_ms": None,
+                "constraints_valid": False, "qubit_count": qubo.n_vars,
+                "notes": str(exc),
+            })
+            continue
         rows.append({
             "backend": backend,
             "objective": result.objective,
             "solve_ms": result.solve_ms,
             "constraints_valid": validate_constraints(result.assignments),
             "qubit_count": result.qubit_count,
+            "notes": None,
         })
     return rows

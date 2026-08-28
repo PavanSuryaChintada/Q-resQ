@@ -24,7 +24,7 @@ def test_returns_one_row_per_backend_with_the_required_fields():
 
     assert [row["backend"] for row in rows] == ["annealing", "ortools", "greedy"]
     for row in rows:
-        assert set(row.keys()) == {"backend", "objective", "solve_ms", "constraints_valid", "qubit_count"}
+        assert set(row.keys()) == {"backend", "objective", "solve_ms", "constraints_valid", "qubit_count", "notes"}
         assert row["constraints_valid"] is True
 
 
@@ -42,3 +42,24 @@ def test_every_backend_solves_the_same_tuned_problem():
         assert isinstance(row["objective"], float)
         assert row["solve_ms"] >= 0
         assert row["qubit_count"] is not None
+
+
+def _oversized_problem():
+    # 10 units x 9 requests, fully connected = 90 variables - well
+    # past qaoa's 24-qubit statevector guard
+    units = [Unit(id=f"u{i}", capacity=1, position=(0.0, 0.0)) for i in range(10)]
+    requests = [Request(id=f"r{j}", severity=0.5, people=1, position=(0.0, 0.0)) for j in range(9)]
+    travel_time_s = {(u.id, r.id): 100.0 for u in units for r in requests}
+    return DispatchProblem(units=units, requests=requests, travel_time_s=travel_time_s)
+
+
+def test_a_backend_that_cannot_run_at_this_size_reports_a_failed_row_not_a_crash():
+    rows = benchmark(_oversized_problem(), backends=("greedy", "qaoa"))
+
+    assert [row["backend"] for row in rows] == ["greedy", "qaoa"]
+    greedy_row, qaoa_row = rows
+    assert greedy_row["constraints_valid"] is True
+
+    assert qaoa_row["constraints_valid"] is False
+    assert qaoa_row["objective"] is None
+    assert qaoa_row["notes"] is not None and "qubit" in qaoa_row["notes"].lower()

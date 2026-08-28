@@ -40,17 +40,29 @@ def _haversine_travel_s(a: tuple[float, float], b: tuple[float, float],
     return (distance_km / speed_kmh) * 3600.0
 
 
-def build_current_problem() -> DispatchProblem:
+def build_current_problem(max_requests: int | None = None, max_units: int | None = None) -> DispatchProblem:
     """Snapshot open requests + available units into a DispatchProblem.
 
     Raises HTTPException(422) if there's nothing to solve. Shared with
     routers/benchmark.py so both read the same live state the same way.
+
+    max_requests/max_units cap the snapshot to the highest-severity
+    subset - used by benchmark.py to keep the comparison within qaoa's
+    24-qubit statevector guard (CLAUDE.md's target zone size: 4 units
+    x 5 requests = 20 qubits) rather than the whole open queue, which
+    routinely has far more variables than qaoa can ever run on
+    unpartitioned.
     """
     open_requests = [r for r in requests_store.values() if r.status == "open"]
     available_units = [u for u in units_store.values() if u.status == "available"]
 
     if not open_requests or not available_units:
         raise HTTPException(status_code=422, detail="no open requests or no available units to dispatch")
+
+    if max_requests is not None:
+        open_requests = sorted(open_requests, key=lambda r: r.severity or 0.0, reverse=True)[:max_requests]
+    if max_units is not None:
+        available_units = available_units[:max_units]
 
     qd_units = [QDUnit(id=str(u.id), capacity=u.capacity, position=u.position, kind=u.kind)
                 for u in available_units]

@@ -43,11 +43,13 @@ export function DispatchControls() {
           {solve.isPending ? "Solving..." : "Dispatch"}
         </button>
         <button
-          onClick={() => benchmark.mutate(["greedy", "annealing", "ortools"], { onSuccess: (r) => setRows(r.rows) })}
+          onClick={() =>
+            benchmark.mutate(["greedy", "annealing", "ortools", "qaoa"], { onSuccess: (r) => setRows(r.rows) })
+          }
           disabled={benchmark.isPending}
           className="h-6 px-3 bg-transparent border border-ground-300 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-300 disabled:opacity-50"
         >
-          {benchmark.isPending ? "Benchmarking..." : "Benchmark"}
+          {benchmark.isPending ? "Benchmarking..." : "Benchmark (incl. qaoa)"}
         </button>
       </div>
 
