@@ -167,32 +167,6 @@ export function MapView({
           console.log("[MapView] requests layers added ok")
         }
 
-        // TEMP diagnostic: a hardcoded marker at the map's own center,
-        // huge and solid red, independent of any query data. If this
-        // doesn't show either, the bug is in the render pipeline, not
-        // in our real data.
-        if (!map.getSource("debug-marker")) {
-          map.addSource("debug-marker", {
-            type: "geojson",
-            data: {
-              type: "FeatureCollection",
-              features: [{
-                type: "Feature",
-                geometry: { type: "Point", coordinates: [center[1], center[0]] },
-                properties: {},
-              }],
-            },
-          })
-          map.addLayer({
-            id: "debug-marker-circle",
-            type: "circle",
-            source: "debug-marker",
-            paint: { "circle-radius": 40, "circle-color": "#ff0000", "circle-opacity": 1 },
-          })
-          // eslint-disable-next-line no-console
-          console.log("[MapView] DEBUG marker added at", [center[1], center[0]])
-        }
-
         setReady(true)
         // eslint-disable-next-line no-console
         console.log("[MapView] setup() complete, ready=true")
