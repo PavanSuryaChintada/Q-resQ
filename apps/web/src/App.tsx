@@ -70,7 +70,12 @@ export default function App() {
                   onSwitchView={() => setUseCarousel(false)}
                 />
               ) : (
-                <RequestsPanel center={DEMO_CENTER} onSwitchView={() => setUseCarousel(true)} />
+                <RequestsPanel
+                  center={DEMO_CENTER}
+                  onSwitchView={() => setUseCarousel(true)}
+                  onRequestSelect={setSelectedRequestId}
+                  selectedRequestId={selectedRequestId}
+                />
               )}
             </div>
           </div>

@@ -15,16 +15,29 @@ function bandForSeverity(sev: number | null | undefined): number {
 interface Props {
   center: [number, number]
   onSwitchView: () => void
+  onRequestSelect: (requestId: string) => void
+  selectedRequestId: string | null
 }
 
-export function RequestsPanel({ center, onSwitchView }: Props) {
+export function RequestsPanel({ center, onSwitchView, onRequestSelect, selectedRequestId }: Props) {
   const { data: requests } = useRequests()
   const createRequest = useCreateRequest()
   const [people, setPeople] = useState(2)
   const [category, setCategory] = useState<"medical" | "stranded" | "evacuation">("stranded")
   const [note, setNote] = useState("")
+  const [search, setSearch] = useState("")
 
   const sorted = [...(requests ?? [])].sort((a, b) => (b.severity ?? 0) - (a.severity ?? 0))
+  const query = search.trim().toLowerCase()
+  const filtered = query
+    ? sorted.filter(
+        (r) =>
+          r.category.toLowerCase().includes(query) ||
+          r.status.toLowerCase().includes(query) ||
+          (r.note ?? "").toLowerCase().includes(query) ||
+          r.id.toLowerCase().includes(query),
+      )
+    : sorted
 
   function submit() {
     const jitterLat = center[0] + (Math.random() - 0.5) * 0.02
@@ -86,6 +99,21 @@ export function RequestsPanel({ center, onSwitchView }: Props) {
           </button>
         </div>
       </div>
+      <div className="h-8 flex items-center px-3 bg-ground-100 border-b border-ground-300 gap-2">
+        <span className="font-display text-[10px] uppercase tracking-[0.1em] text-ink-300">Search</span>
+        <input
+          type="text"
+          placeholder="category, status, note, or id..."
+          className="flex-1 bg-ground-300 text-ink-000 text-[12px] font-body h-6 px-2 border border-ground-400"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && (
+          <span className="font-data text-[11px] text-ink-300 shrink-0">
+            {filtered.length} match{filtered.length === 1 ? "" : "es"}
+          </span>
+        )}
+      </div>
       <div className="flex-1 overflow-y-auto">
         <table className="w-full text-[13px] font-body">
           <thead className="sticky top-0 bg-ground-200 text-ink-200 text-[11px] uppercase font-display">
@@ -98,17 +126,26 @@ export function RequestsPanel({ center, onSwitchView }: Props) {
             </tr>
           </thead>
           <tbody>
-            {sorted.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-2 py-4 text-ink-300 text-center">
-                  No open requests. Requests appear here as they arrive.
+                  {query ? "No requests match that search." : "No open requests. Requests appear here as they arrive."}
                 </td>
               </tr>
             )}
-            {sorted.map((r) => {
+            {filtered.map((r) => {
               const band = bandForSeverity(r.severity)
+              const isSelected = r.id === selectedRequestId
               return (
-                <tr key={r.id} className="border-b border-ground-300" style={{ borderLeft: `2px solid ${SEV_BAND_COLOR[band]}` }}>
+                <tr
+                  key={r.id}
+                  onClick={() => onRequestSelect(r.id)}
+                  className={`border-b border-ground-300 cursor-pointer hover:bg-ground-200 ${
+                    isSelected ? "bg-ground-200" : ""
+                  }`}
+                  style={{ borderLeft: `2px solid ${SEV_BAND_COLOR[band]}` }}
+                  title="Click to locate on the map"
+                >
                   <td className="px-2 py-1 font-data">{(r.severity ?? 0).toFixed(2)}</td>
                   <td className="px-2 py-1 font-data">{r.people_count}</td>
                   <td className="px-2 py-1">{r.category}</td>
