@@ -4,7 +4,12 @@ import { useRunBenchmark, useSeedTitli, useSolveDispatch } from "../lib/hooks"
 
 const BACKENDS: Backend[] = ["greedy", "annealing", "ortools", "qaoa"]
 
-export function DispatchControls() {
+interface Props {
+  showRoutes: boolean
+  onToggleRoutes: () => void
+}
+
+export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
   const [backend, setBackend] = useState<Backend>("greedy")
   const solve = useSolveDispatch()
   const benchmark = useRunBenchmark()
@@ -23,6 +28,19 @@ export function DispatchControls() {
           className="ml-auto h-6 px-2 bg-ground-300 border border-ground-400 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-400 disabled:opacity-50"
         >
           {seed.isPending ? "Seeding..." : "Seed Titli"}
+        </button>
+        <button
+          onClick={() => {
+            console.log("Toggle routes clicked, current state:", showRoutes)
+            onToggleRoutes()
+          }}
+          className={`h-6 px-2 text-[11px] font-display uppercase tracking-wide border ${
+            showRoutes 
+              ? "bg-ground-300 border-ground-400 text-ink-000" 
+              : "bg-transparent border-ground-300 text-ink-200 hover:bg-ground-200"
+          }`}
+        >
+          {showRoutes ? "Hide Routes" : "Show Routes"}
         </button>
         <select
           className="bg-ground-300 text-ink-000 text-[12px] font-data h-6 px-1 border border-ground-400"

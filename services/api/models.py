@@ -119,6 +119,7 @@ class AssignmentOut(BaseModel):
     request_id: UUID
     zone_id: int | None = None
     travel_s: int | None = None
+    route: dict | None = None  # GeoJSON LineString for unit->request path
 
 
 class DispatchRoundOut(BaseModel):

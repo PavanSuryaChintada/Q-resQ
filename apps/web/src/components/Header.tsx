@@ -1,6 +1,6 @@
 interface Props {
-  view: "dashboard" | "architecture"
-  onViewChange: (v: "dashboard" | "architecture") => void
+  view: "dashboard" | "architecture" | "flow"
+  onViewChange: (v: "dashboard" | "architecture" | "flow") => void
 }
 
 export function Header({ view, onViewChange }: Props) {
@@ -18,6 +18,16 @@ export function Header({ view, onViewChange }: Props) {
           }`}
         >
           Dashboard
+        </button>
+        <button
+          onClick={() => onViewChange("flow")}
+          className={`h-7 px-3 text-[11px] font-display uppercase tracking-wide border ${
+            view === "flow"
+              ? "bg-ground-300 border-ground-400 text-ink-000"
+              : "bg-transparent border-ground-300 text-ink-200 hover:bg-ground-200"
+          }`}
+        >
+          Flow
         </button>
         <button
           onClick={() => onViewChange("architecture")}

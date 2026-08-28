@@ -58,6 +58,8 @@ def seed_titli(n_requests: int = 30, seed: int = 11102018) -> SeedResult:
     requests_store.clear()
     for _ in range(n_requests):
         request_id = uuid4()
+        # Generate random severity (0-1) for demo purposes
+        severity = rng.random()
         payload = RequestCreate(
             id=request_id,
             location=(rng.uniform(*_LAT_RANGE), rng.uniform(*_LON_RANGE)),
@@ -65,7 +67,7 @@ def seed_titli(n_requests: int = 30, seed: int = 11102018) -> SeedResult:
             category=rng.choices(_CATEGORIES, weights=_CATEGORY_WEIGHTS)[0],
             created_at=datetime.now(timezone.utc),
         )
-        requests_store[request_id] = RequestOut(**payload.model_dump(), status="open")
+        requests_store[request_id] = RequestOut(**payload.model_dump(), status="open", severity=severity)
 
     log_router.append(
         "system",

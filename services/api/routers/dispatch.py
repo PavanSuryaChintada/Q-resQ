@@ -85,10 +85,28 @@ def solve_dispatch(payload: DispatchSolveRequest) -> DispatchRoundOut:
                                 max_requests_per_zone=5, max_units_per_zone=4)
 
     round_id = uuid4()
-    assignments = [
-        AssignmentOut(id=uuid4(), unit_id=UUID(unit_id), request_id=UUID(request_id))
-        for unit_id, request_id in result.assignments
-    ]
+    assignments = []
+    for unit_id, request_id in result.assignments:
+        unit = units_store.get(UUID(unit_id))
+        request = requests_store.get(UUID(request_id))
+        route = None
+        if unit and request:
+            # Create simple straight-line route as GeoJSON LineString
+            route = {
+                "type": "LineString",
+                "coordinates": [
+                    [unit.position[1], unit.position[0]],  # lon, lat for unit
+                    [request.location[1], request.location[0]],  # lon, lat for request
+                ]
+            }
+        assignments.append(
+            AssignmentOut(
+                id=uuid4(),
+                unit_id=UUID(unit_id),
+                request_id=UUID(request_id),
+                route=route
+            )
+        )
     round_out = DispatchRoundOut(
         id=round_id,
         started_at=datetime.now(timezone.utc),
@@ -125,3 +143,12 @@ def get_round(round_id: UUID) -> DispatchRoundOut:
     if round_out is None:
         raise HTTPException(status_code=404, detail="dispatch round not found")
     return round_out
+
+
+@router.get("/assignments", response_model=list[AssignmentOut])
+def get_assignments() -> list[AssignmentOut]:
+    """Return all assignments from all dispatch rounds."""
+    all_assignments: list[AssignmentOut] = []
+    for round_out in _rounds.values():
+        all_assignments.extend(round_out.assignments)
+    return all_assignments

@@ -66,6 +66,7 @@ export interface AssignmentOut {
   request_id: string
   zone_id?: number | null
   travel_s?: number | null
+  route?: { type: "LineString"; coordinates: number[][] } | null
 }
 
 export interface DispatchRoundOut {
@@ -140,6 +141,8 @@ export const api = {
   }) => request<RequestOut>("/requests", { method: "POST", body: JSON.stringify(payload) }),
 
   units: () => request<UnitOut[]>("/units"),
+
+  assignments: () => request<AssignmentOut[]>("/dispatch/assignments"),
 
   solveDispatch: (backend: Backend, timeout_s = 10.0) =>
     request<DispatchRoundOut>("/dispatch/solve", {

@@ -21,6 +21,10 @@ export function useUnits() {
   return useQuery({ queryKey: ["units"], queryFn: api.units, refetchInterval: 4000 })
 }
 
+export function useAssignments() {
+  return useQuery({ queryKey: ["assignments"], queryFn: api.assignments, refetchInterval: 4000 })
+}
+
 export function useLog(since?: number) {
   return useQuery({ queryKey: ["log", since], queryFn: () => api.log(since), refetchInterval: 2000 })
 }
@@ -45,6 +49,7 @@ export function useSolveDispatch() {
       qc.invalidateQueries({ queryKey: ["requests"] })
       qc.invalidateQueries({ queryKey: ["units"] })
       qc.invalidateQueries({ queryKey: ["log"] })
+      qc.invalidateQueries({ queryKey: ["assignments"] })
     },
   })
 }
