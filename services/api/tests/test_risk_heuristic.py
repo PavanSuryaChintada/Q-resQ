@@ -74,6 +74,31 @@ def test_constant_field_does_not_produce_nan():
         assert not np.any(np.isnan(values))
 
 
+def test_a_few_extreme_outliers_do_not_flatten_the_rest_of_the_map():
+    # 100 cells clustered in a realistic low-lying-floodplain range
+    # (0-10m HAND, like most of a real coastal demo area), plus 3
+    # hilly outliers up to 140m. Plain min-max normalisation would
+    # compress all 100 clustered cells toward the same near-maximum
+    # risk value (exactly what made the real risk map render as a
+    # near-uniform wash of one colour) - percentile-based normalising
+    # should keep meaningful spread within the clustered majority.
+    rng = np.random.default_rng(1)
+    clustered = rng.uniform(0.0, 10.0, 100)
+    outliers = np.array([80.0, 110.0, 140.0])
+    hand = np.concatenate([clustered, outliers])
+    rain_72h = np.full(len(hand), 50.0)
+    slope_deg = np.full(len(hand), 3.0)
+    dist_stream_m = np.full(len(hand), 300.0)
+    drainage_penalty = np.full(len(hand), 0.3)
+
+    risk, contributions = compute_heuristic_risk(hand, rain_72h, slope_deg, dist_stream_m, drainage_penalty)
+
+    hand_contribution_clustered = contributions["hand"][:100]
+    # with real spread preserved, the clustered majority should not
+    # all collapse into a tiny band near the same value
+    assert hand_contribution_clustered.max() - hand_contribution_clustered.min() > 0.15
+
+
 @pytest.mark.parametrize("score,expected_band", [
     (0.0, 0), (0.19, 0),
     (0.2, 1), (0.39, 1),

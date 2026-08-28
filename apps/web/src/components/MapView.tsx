@@ -27,7 +27,23 @@ const BASEMAP_STYLE: StyleSpecification = {
     },
   },
   layers: [
-    { id: "osm-tiles", type: "raster", source: "osm-tiles", minzoom: 0, maxzoom: 19 },
+    {
+      id: "osm-tiles",
+      type: "raster",
+      source: "osm-tiles",
+      minzoom: 0,
+      maxzoom: 19,
+      // docs/DESIGN.md #6: "Basemap desaturated to greyscale ... the
+      // basemap must not compete." Colour is reserved for severity
+      // data - full desaturation plus a slight darken/contrast pull
+      // so the ground tones read closer to the --ground-* palette
+      // than raw OSM's cream/green/blue.
+      paint: {
+        "raster-saturation": -1,
+        "raster-contrast": -0.2,
+        "raster-brightness-max": 0.55,
+      },
+    },
   ],
 }
 
@@ -87,7 +103,7 @@ export function MapView({
             type: "circle",
             source: "risk-cells",
             paint: {
-              "circle-radius": 15,
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 4, 14, 10],
               "circle-opacity": 0.55,
               "circle-color": [
                 "match", ["get", "risk_band"],
@@ -108,12 +124,23 @@ export function MapView({
 
         if (!map.getSource("routes")) {
           map.addSource("routes", { type: "geojson", data: EMPTY_FC })
+          // dark outline underneath + bright ink line on top: this
+          // pair stays legible against ANY basemap tone (light or
+          // dark), unlike a single flat colour that can wash out -
+          // both colours are existing DESIGN.md ground/ink tokens
+          map.addLayer({
+            id: "routes-outline",
+            type: "line",
+            source: "routes",
+            layout: { "line-cap": "round", "line-join": "round" },
+            paint: { "line-color": "#101A1E", "line-width": 7, "line-opacity": 0.9 },
+          })
           map.addLayer({
             id: "routes-lines",
             type: "line",
             source: "routes",
             layout: { "line-cap": "round", "line-join": "round" },
-            paint: { "line-color": "#F0EBE1", "line-width": 4, "line-opacity": 0.9 },
+            paint: { "line-color": "#F0EBE1", "line-width": 3, "line-opacity": 1 },
           })
           // eslint-disable-next-line no-console
           console.log("[MapView] routes layer added ok")
@@ -262,7 +289,9 @@ export function MapView({
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready || !map.getLayer("routes-lines")) return
-    map.setLayoutProperty("routes-lines", "visibility", showRoutes ? "visible" : "none")
+    const visibility = showRoutes ? "visible" : "none"
+    map.setLayoutProperty("routes-lines", "visibility", visibility)
+    map.setLayoutProperty("routes-outline", "visibility", visibility)
   }, [ready, showRoutes])
 
   useEffect(() => {

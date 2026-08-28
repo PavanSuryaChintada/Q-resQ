@@ -21,12 +21,20 @@ import numpy as np
 _WEIGHTS = {"hand": 0.40, "rain_72h": 0.30, "slope": 0.15, "dist_stream": 0.10, "drainage": 0.05}
 
 
-def _minmax_norm(values: np.ndarray) -> np.ndarray:
+def _minmax_norm(values: np.ndarray, low_pct: float = 5.0, high_pct: float = 95.0) -> np.ndarray:
+    """Min-max normalisation against the [low_pct, high_pct] percentile
+    range rather than the raw min/max. A small number of extreme
+    outliers (a few hilly cells in an otherwise low-lying floodplain)
+    would otherwise compress the entire rest of the field toward the
+    same near-0-or-1 value under plain min-max - clipping to
+    percentiles keeps the majority's real spread while still mapping
+    genuine outliers to (clipped) 0 or 1.
+    """
     values = np.asarray(values, dtype=float)
-    vmin, vmax = np.nanmin(values), np.nanmax(values)
+    vmin, vmax = np.nanpercentile(values, low_pct), np.nanpercentile(values, high_pct)
     if vmax - vmin < 1e-12:
         return np.zeros_like(values)  # constant field: no relative risk signal
-    return (values - vmin) / (vmax - vmin)
+    return np.clip((values - vmin) / (vmax - vmin), 0.0, 1.0)
 
 
 def compute_heuristic_risk(
