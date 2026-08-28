@@ -1,0 +1,43 @@
+# Fully resolved dependency set for packages/qubo-dispatch, generated
+# via `pip freeze` against a fresh Python 3.11.9 venv with
+# `pip install -e ".[dev,classical,quantum]"`.
+#
+# CLAUDE.md #3: pin Qiskit exactly and commit the lockfile in hour 1 -
+# the 1.0 API change is real and version drift here is the single
+# most likely thing to eat the build. Regenerate with:
+#   python -m pip freeze | grep -v qubo-dispatch > requirements-lock.txt
+
+absl-py==2.5.0
+colorama==0.4.6
+dill==0.4.1
+docplex==2.32.264
+immutabledict==4.3.1
+iniconfig==2.3.0
+joblib==1.5.3
+mpmath==1.3.0
+narwhals==2.25.0
+networkx==3.6.1
+numpy==2.4.6
+ortools==9.11.4210
+packaging==26.3
+pandas==3.0.5
+pluggy==1.6.0
+protobuf==5.26.1
+psutil==7.2.2
+Pygments==2.21.0
+pytest==9.1.1
+python-dateutil==2.9.0.post0
+qiskit==1.2.4
+qiskit-aer==0.15.1
+qiskit-algorithms==0.4.0
+qiskit-optimization==0.6.1
+rustworkx==0.18.1
+scikit-learn==1.9.0
+scipy==1.17.1
+six==1.17.0
+stevedore==5.9.1
+symengine==0.13.0
+sympy==1.14.0
+threadpoolctl==3.6.0
+typing_extensions==4.16.0
+tzdata==2026.3
