@@ -77,86 +77,103 @@ export function MapView({
     })
 
     const setup = () => {
-      if (!map.getSource("risk-cells")) {
-        map.addSource("risk-cells", { type: "geojson", data: EMPTY_FC })
-        map.addLayer({
-          id: "risk-cells-fill",
-          type: "circle",
-          source: "risk-cells",
-          paint: {
-            "circle-radius": 15,
-            "circle-opacity": 0.55,
-            "circle-color": [
-              "match", ["get", "risk_band"],
-              0, SEV_COLORS[0], 1, SEV_COLORS[1], 2, SEV_COLORS[2], 3, SEV_COLORS[3], 4, SEV_COLORS[4],
-              "#34505C",
-            ],
-          },
-        })
-        map.on("mouseenter", "risk-cells-fill", () => { map.getCanvas().style.cursor = "pointer" })
-        map.on("mouseleave", "risk-cells-fill", () => { map.getCanvas().style.cursor = "" })
-        map.on("click", "risk-cells-fill", (e) => {
-          const id = e.features?.[0]?.properties?.id
-          if (typeof id === "number" && onSelectCellRef.current) onSelectCellRef.current(id)
-        })
-      }
+      // eslint-disable-next-line no-console
+      console.log("[MapView] setup() starting, isStyleLoaded:", map.isStyleLoaded())
+      try {
+        if (!map.getSource("risk-cells")) {
+          map.addSource("risk-cells", { type: "geojson", data: EMPTY_FC })
+          map.addLayer({
+            id: "risk-cells-fill",
+            type: "circle",
+            source: "risk-cells",
+            paint: {
+              "circle-radius": 15,
+              "circle-opacity": 0.55,
+              "circle-color": [
+                "match", ["get", "risk_band"],
+                0, SEV_COLORS[0], 1, SEV_COLORS[1], 2, SEV_COLORS[2], 3, SEV_COLORS[3], 4, SEV_COLORS[4],
+                "#34505C",
+              ],
+            },
+          })
+          map.on("mouseenter", "risk-cells-fill", () => { map.getCanvas().style.cursor = "pointer" })
+          map.on("mouseleave", "risk-cells-fill", () => { map.getCanvas().style.cursor = "" })
+          map.on("click", "risk-cells-fill", (e) => {
+            const id = e.features?.[0]?.properties?.id
+            if (typeof id === "number" && onSelectCellRef.current) onSelectCellRef.current(id)
+          })
+          // eslint-disable-next-line no-console
+          console.log("[MapView] risk-cells layer added ok")
+        }
 
-      if (!map.getSource("routes")) {
-        map.addSource("routes", { type: "geojson", data: EMPTY_FC })
-        map.addLayer({
-          id: "routes-lines",
-          type: "line",
-          source: "routes",
-          layout: { "line-cap": "round", "line-join": "round" },
-          paint: { "line-color": "#F0EBE1", "line-width": 4, "line-opacity": 0.9 },
-        })
-      }
+        if (!map.getSource("routes")) {
+          map.addSource("routes", { type: "geojson", data: EMPTY_FC })
+          map.addLayer({
+            id: "routes-lines",
+            type: "line",
+            source: "routes",
+            layout: { "line-cap": "round", "line-join": "round" },
+            paint: { "line-color": "#F0EBE1", "line-width": 4, "line-opacity": 0.9 },
+          })
+          // eslint-disable-next-line no-console
+          console.log("[MapView] routes layer added ok")
+        }
 
-      if (!map.getSource("units")) {
-        map.addSource("units", { type: "geojson", data: EMPTY_FC })
-        map.addLayer({
-          id: "units-points",
-          type: "circle",
-          source: "units",
-          paint: {
-            "circle-radius": 8,
-            "circle-color": "#F0EBE1",
-            "circle-stroke-width": 2,
-            "circle-stroke-color": "#101A1E",
-          },
-        })
-      }
+        if (!map.getSource("units")) {
+          map.addSource("units", { type: "geojson", data: EMPTY_FC })
+          map.addLayer({
+            id: "units-points",
+            type: "circle",
+            source: "units",
+            paint: {
+              "circle-radius": 8,
+              "circle-color": "#F0EBE1",
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#101A1E",
+            },
+          })
+          // eslint-disable-next-line no-console
+          console.log("[MapView] units layer added ok")
+        }
 
-      if (!map.getSource("requests")) {
-        map.addSource("requests", { type: "geojson", data: EMPTY_FC })
-        map.addLayer({
-          id: "requests-points",
-          type: "circle",
-          source: "requests",
-          paint: {
-            "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 8, 10, 10, 15, 12],
-            "circle-color": [
-              "match", ["get", "severity_band"],
-              0, SEV_COLORS[0], 1, SEV_COLORS[1], 2, SEV_COLORS[2], 3, SEV_COLORS[3], 4, SEV_COLORS[4],
-              "#34505C",
-            ],
-          },
-        })
-        map.addLayer({
-          id: "requests-ring",
-          type: "circle",
-          source: "requests",
-          paint: {
-            "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 10, 10, 13, 15, 15],
-            "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 0, 2, 10, 3, 15, 4],
-            "circle-stroke-color": "#F0EBE1",
-            "circle-stroke-opacity": ["match", ["get", "status"], "assigned", 1, "in_progress", 1, 0],
-            "circle-color": "transparent",
-          },
-        })
-      }
+        if (!map.getSource("requests")) {
+          map.addSource("requests", { type: "geojson", data: EMPTY_FC })
+          map.addLayer({
+            id: "requests-points",
+            type: "circle",
+            source: "requests",
+            paint: {
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 8, 10, 10, 15, 12],
+              "circle-color": [
+                "match", ["get", "severity_band"],
+                0, SEV_COLORS[0], 1, SEV_COLORS[1], 2, SEV_COLORS[2], 3, SEV_COLORS[3], 4, SEV_COLORS[4],
+                "#34505C",
+              ],
+            },
+          })
+          map.addLayer({
+            id: "requests-ring",
+            type: "circle",
+            source: "requests",
+            paint: {
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 10, 10, 13, 15, 15],
+              "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 0, 2, 10, 3, 15, 4],
+              "circle-stroke-color": "#F0EBE1",
+              "circle-stroke-opacity": ["match", ["get", "status"], "assigned", 1, "in_progress", 1, 0],
+              "circle-color": "transparent",
+            },
+          })
+          // eslint-disable-next-line no-console
+          console.log("[MapView] requests layers added ok")
+        }
 
-      setReady(true)
+        setReady(true)
+        // eslint-disable-next-line no-console
+        console.log("[MapView] setup() complete, ready=true")
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[MapView] setup() THREW - this is why nothing renders:", err)
+      }
     }
 
     if (map.isStyleLoaded()) setup()
