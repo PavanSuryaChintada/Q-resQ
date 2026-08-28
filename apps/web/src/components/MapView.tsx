@@ -189,12 +189,19 @@ export function MapView({
 
   useEffect(() => {
     const map = mapRef.current
+    // eslint-disable-next-line no-console
+    console.log("[MapView] risk-cells effect:", { hasMap: !!map, ready, cellCount: riskCells?.features?.length })
     if (!map || !ready || !riskCells) return
-    map.getSource<GeoJSONSource>("risk-cells")?.setData(riskCells as unknown as FeatureCollection)
+    const src = map.getSource<GeoJSONSource>("risk-cells")
+    // eslint-disable-next-line no-console
+    console.log("[MapView] risk-cells source found:", !!src, "setting", riskCells.features.length, "features")
+    src?.setData(riskCells as unknown as FeatureCollection)
   }, [ready, riskCells])
 
   useEffect(() => {
     const map = mapRef.current
+    // eslint-disable-next-line no-console
+    console.log("[MapView] units effect:", { hasMap: !!map, ready, unitCount: units?.length })
     if (!map || !ready || !units) return
     const geojson: FeatureCollection = {
       type: "FeatureCollection",
@@ -204,11 +211,16 @@ export function MapView({
         properties: { label: u.label, status: u.status },
       })),
     }
-    map.getSource<GeoJSONSource>("units")?.setData(geojson)
+    const src = map.getSource<GeoJSONSource>("units")
+    // eslint-disable-next-line no-console
+    console.log("[MapView] units source found:", !!src, "first feature:", geojson.features[0])
+    src?.setData(geojson)
   }, [ready, units])
 
   useEffect(() => {
     const map = mapRef.current
+    // eslint-disable-next-line no-console
+    console.log("[MapView] requests effect:", { hasMap: !!map, ready, requestCount: requests?.length })
     if (!map || !ready || !requests) return
     const geojson: FeatureCollection = {
       type: "FeatureCollection",
@@ -223,7 +235,10 @@ export function MapView({
         }
       }),
     }
-    map.getSource<GeoJSONSource>("requests")?.setData(geojson)
+    const src = map.getSource<GeoJSONSource>("requests")
+    // eslint-disable-next-line no-console
+    console.log("[MapView] requests source found:", !!src, "first feature:", geojson.features[0])
+    src?.setData(geojson)
   }, [ready, requests])
 
   useEffect(() => {
