@@ -1,0 +1,20 @@
+# Pinned per docs/TRD.md #9. Do not upgrade without updating both files.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+# supabase-py bumped from the originally pinned 2.11.0: that version
+# validates SUPABASE_KEY against a JWT-shape regex and rejects
+# Supabase's newer sb_publishable_/sb_secret_ key format outright.
+# 2.31.0 accepts it; verified end-to-end (client + a real query)
+# against this project's live database.
+supabase==2.31.0
+lightgbm==4.5.0
+scikit-learn==1.6.0
+rasterio==1.4.3
+pysheds==0.4
+osmnx==2.0.1
+networkx==3.4.2
+ortools==9.11.4210
+qiskit==1.2.4
+qiskit-aer==0.15.1
+qiskit-optimization==0.6.1

@@ -374,7 +374,9 @@ packages/qubo-dispatch/tests/
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
-supabase==2.11.0
+supabase==2.31.0  # bumped from 2.11.0: that version rejects Supabase's
+                  # newer sb_publishable_/sb_secret_ key format (JWT-shape
+                  # regex validation) - see services/api/requirements.txt
 lightgbm==4.5.0
 scikit-learn==1.6.0
 rasterio==1.4.3
