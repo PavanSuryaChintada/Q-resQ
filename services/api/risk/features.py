@@ -10,20 +10,38 @@ defaults to a neutral 0.5, disclosed here rather than faked as real.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
 import rasterio
 
-from risk.heuristic import band, compute_heuristic_risk
+from risk.heuristic import DISASTER_WEIGHTS, band, compute_heuristic_risk
 from risk.rainfall import load_rainfall_dataset, rain_window
 from risk.terrain import build_grid, compute_hand, compute_slope, compute_stream_distance, compute_twi
 
 _API_DIR = Path(__file__).resolve().parents[1]
 FULL_DEM_PATH = str(_API_DIR / "data" / "raw" / "srikakulam_dem.tif")
 DEM_PATH = str(_API_DIR / "data" / "raw" / "srikakulam_dem_demo_crop.tif")
-RAINFALL_NC_PATH = "C:/Users/prave/Downloads/RF25_ind2018_rfp25.nc"
-CACHE_PATH = _API_DIR / "data" / "raw" / "risk_cells_cache.npy"
+# Only touched on a cache miss (see build_risk_cells) - the deployed
+# backend ships the precomputed .npy caches and never hits this path.
+# RAINFALL_NC_PATH is an env var, not a hardcoded machine-specific path,
+# so a cache-miss fails with a clear "set this env var" error instead
+# of silently referencing a path that only exists on one developer's
+# machine.
+RAINFALL_NC_PATH = os.environ.get(
+    "RF25_RAINFALL_NC_PATH", str(_API_DIR / "data" / "raw" / "RF25_ind2018_rfp25.nc")
+)
+CACHE_DIR = _API_DIR / "data" / "raw"
+
+
+def _cache_path(disaster_type: str) -> Path:
+    suffix = "" if disaster_type == "cyclone" else f"_{disaster_type}"
+    return CACHE_DIR / f"risk_cells_cache{suffix}.npy"
+
+
+_TERRAIN_CACHE_PATH = CACHE_DIR / "risk_terrain_cache.npy"
+_TERRAIN_COLS = ["lat", "lon", "hand_m", "slope_deg", "twi", "dist_stream_m", "rain_72h_mm"]
 
 # Focused demo area around Srikakulam town/coast - the full-district
 # DEM works for HAND/TWI (computed once over the whole raster), but
@@ -69,10 +87,12 @@ def _ensure_cropped_dem() -> None:
     print(f"[features] cropped DEM: {data.shape}")
 
 
-def build_risk_cells(force: bool = False) -> list[dict]:
-    if CACHE_PATH.exists() and not force:
-        return list(np.load(CACHE_PATH, allow_pickle=True))
-
+def _compute_terrain_grid() -> dict[str, np.ndarray]:
+    """The expensive part: real HAND/slope/TWI/stream-distance from the
+    DEM, plus real rainfall, sampled onto the 250m grid. Identical for
+    every disaster_type - only the final weighting in build_risk_cells
+    differs - so this is cached separately and computed at most once.
+    """
     _ensure_cropped_dem()
 
     print("[features] computing terrain features from the cropped demo-area DEM")
@@ -100,14 +120,66 @@ def build_risk_cells(force: bool = False) -> list[dict]:
         rain_window(rain_ds, lat, lon, EVENT_END_DATE, days=3) for lat, lon in zip(lats, lons)
     ])
 
-    drainage_vals = np.full(len(grid), 0.5)  # no soil drainage source yet - neutral default
+    return {
+        "lat": lats, "lon": lons, "hand_m": hand_vals, "slope_deg": slope_vals,
+        "twi": twi_vals, "dist_stream_m": stream_vals, "rain_72h_mm": rain_vals,
+    }
+
+
+def _terrain_grid_from_existing_cache() -> dict[str, np.ndarray] | None:
+    """If a per-type cells cache already exists (from before disaster
+    types existed, or a prior run), its terrain columns are the exact
+    same real values _compute_terrain_grid would produce - reuse them
+    instead of re-running HAND, which takes 80s+.
+    """
+    for candidate in CACHE_DIR.glob("risk_cells_cache*.npy"):
+        cells = list(np.load(candidate, allow_pickle=True))
+        if not cells:
+            continue
+        return {col: np.array([c[col] for c in cells], dtype=float) for col in _TERRAIN_COLS}
+    return None
+
+
+def _get_terrain_grid(force: bool = False) -> dict[str, np.ndarray]:
+    if _TERRAIN_CACHE_PATH.exists() and not force:
+        return dict(np.load(_TERRAIN_CACHE_PATH, allow_pickle=True).item())
+
+    grid = None if force else _terrain_grid_from_existing_cache()
+    if grid is None:
+        grid = _compute_terrain_grid()
+
+    np.save(_TERRAIN_CACHE_PATH, grid, allow_pickle=True)
+    return grid
+
+
+def build_risk_cells(force: bool = False, disaster_type: str = "cyclone") -> list[dict]:
+    """disaster_type re-weights the SAME real Srikakulam terrain and
+    rainfall grid toward whichever physical driver matters most for
+    that hazard (risk/heuristic.py:DISASTER_WEIGHTS) - it does not
+    fetch different geography or a different real historical event.
+    """
+    if disaster_type not in DISASTER_WEIGHTS:
+        raise ValueError(f"unknown disaster_type {disaster_type!r}, expected one of {list(DISASTER_WEIGHTS)}")
+
+    cache_path = _cache_path(disaster_type)
+    if cache_path.exists() and not force:
+        return list(np.load(cache_path, allow_pickle=True))
+
+    terrain = _get_terrain_grid(force=force)
+    lats, lons = terrain["lat"], terrain["lon"]
+    hand_vals, slope_vals = terrain["hand_m"], terrain["slope_deg"]
+    twi_vals, stream_vals = terrain["twi"], terrain["dist_stream_m"]
+    rain_vals = terrain["rain_72h_mm"]
+
+    drainage_vals = np.full(len(lats), 0.5)  # no soil drainage source yet - neutral default
 
     risk_score, contributions = compute_heuristic_risk(
         hand_vals, rain_vals, slope_vals, stream_vals, drainage_vals,
+        weights=DISASTER_WEIGHTS[disaster_type],
     )
 
     cells = []
-    for i in range(len(grid)):
+    for i in range(len(lats)):
         cells.append({
             "id": i,
             "lat": float(lats[i]),
@@ -122,17 +194,17 @@ def build_risk_cells(force: bool = False) -> list[dict]:
             "contributions": {k: float(v[i]) for k, v in contributions.items()},
         })
 
-    np.save(CACHE_PATH, np.array(cells, dtype=object), allow_pickle=True)
-    print(f"[features] computed and cached {len(cells)} risk cells at {CACHE_PATH}")
+    np.save(cache_path, np.array(cells, dtype=object), allow_pickle=True)
+    print(f"[features] computed and cached {len(cells)} risk cells at {cache_path}")
     return cells
 
 
-def nearest_risk_score(lat: float, lon: float) -> float:
+def nearest_risk_score(lat: float, lon: float, disaster_type: str = "cyclone") -> float:
     """area_risk for dispatch/severity.py: the nearest computed risk
     cell's score, or a neutral default if the point falls outside the
     demo grid entirely.
     """
-    cells = build_risk_cells()
+    cells = build_risk_cells(disaster_type=disaster_type)
     if not cells:
         return 0.5
     best = min(cells, key=lambda c: (c["lat"] - lat) ** 2 + (c["lon"] - lon) ** 2)

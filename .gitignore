@@ -23,7 +23,18 @@ apps/web/.vite/
 *.local
 
 # Data / models — large, regenerable, not source
-services/api/data/raw/
+# Excluding contents (data/raw/*) rather than the directory itself
+# (data/raw/) - a directory-level exclusion blocks the negation
+# patterns below from ever being checked, since git won't descend
+# into an ignored directory at all.
+services/api/data/raw/*
+# ...except the small precomputed risk caches: the deployed backend
+# reads these directly and never needs the ~130MB of raw DEM/rainfall
+# source files at runtime - see risk/features.py's cache-hit short
+# circuit. Without these committed, a fresh deploy has no risk data
+# and no way to compute it (no DEM, no OpenTopography key set).
+!services/api/data/raw/risk_cells_cache*.npy
+!services/api/data/raw/risk_terrain_cache.npy
 services/api/models/*.txt
 apps/web/public/tiles/*.pmtiles
 

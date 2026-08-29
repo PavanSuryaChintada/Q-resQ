@@ -1,6 +1,10 @@
-const BASE = "/api"
+// In dev, "/api" is rewritten to the local backend by vite.config.ts's
+// proxy. In production there's no dev-server proxy, so VITE_API_URL
+// must be set at build time to the deployed backend's full URL.
+const BASE = import.meta.env.VITE_API_URL || "/api"
 
 export type Backend = "qaoa" | "annealing" | "ortools" | "greedy"
+export type DisasterType = "cyclone" | "flood" | "urban_flooding" | "landslide"
 
 export interface RiskCellProperties {
   id: number
@@ -67,6 +71,7 @@ export interface AssignmentOut {
   zone_id?: number | null
   travel_s?: number | null
   route?: { type: "LineString"; coordinates: number[][] } | null
+  route_source?: "road" | "direct" | null
 }
 
 export interface DispatchRoundOut {
@@ -110,6 +115,21 @@ export interface SeedResult {
   requests_created: number
 }
 
+export interface LiveRiskRangeOut {
+  min_date: string
+  max_date: string
+}
+
+export interface LiveRiskOut {
+  date: string
+  rain_72h_mm: number
+  max_band: number
+  elevated_cell_count: number
+  total_cells: number
+  verdict: string
+  note: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -117,7 +137,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!response.ok) {
     const body = await response.text()
-    throw new Error(`${init?.method ?? "GET"} ${path} -> ${response.status}: ${body}`)
+    let detail = body
+    try {
+      const parsed = JSON.parse(body)
+      if (typeof parsed?.detail === "string") detail = parsed.detail
+    } catch {
+      // not JSON - fall back to raw body text
+    }
+    throw new Error(detail)
   }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
@@ -126,8 +153,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ status: string }>("/health"),
 
-  riskCells: () => request<RiskCellCollection>("/risk/cells"),
-  riskCell: (id: number) => request<RiskCellDetail>(`/risk/cell/${id}`),
+  riskCells: (disasterType: DisasterType = "cyclone") =>
+    request<RiskCellCollection>(`/risk/cells?disaster_type=${disasterType}`),
+  riskCell: (id: number, disasterType: DisasterType = "cyclone") =>
+    request<RiskCellDetail>(`/risk/cell/${id}?disaster_type=${disasterType}`),
+  liveRisk: (date?: string, disasterType: DisasterType = "cyclone") =>
+    request<LiveRiskOut>(
+      `/risk/live?disaster_type=${disasterType}${date ? `&date=${date}` : ""}`,
+    ),
+  liveRiskRange: () => request<LiveRiskRangeOut>("/risk/live/range"),
 
   requests: (status?: string) =>
     request<RequestOut[]>(`/requests${status ? `?status=${status}` : ""}`),
@@ -150,6 +184,12 @@ export const api = {
       body: JSON.stringify({ backend, timeout_s }),
     }),
 
+  assignUnit: (requestId: string, unitId: string) =>
+    request<AssignmentOut>("/dispatch/assign", {
+      method: "POST",
+      body: JSON.stringify({ request_id: requestId, unit_id: unitId }),
+    }),
+
   runBenchmark: (backends?: Backend[]) =>
     request<BenchmarkRunResult>("/benchmark/run", {
       method: "POST",
@@ -158,6 +198,9 @@ export const api = {
 
   log: (since?: number) => request<LogLine[]>(`/log${since ? `?since=${since}` : ""}`),
 
-  seedTitli: (n_requests = 30) =>
-    request<SeedResult>(`/seed/titli?n_requests=${n_requests}`, { method: "POST" }),
+  seedTitli: (n_requests = 30, disasterType: DisasterType = "cyclone") =>
+    request<SeedResult>(
+      `/seed/titli?n_requests=${n_requests}&disaster_type=${disasterType}`,
+      { method: "POST" },
+    ),
 }
