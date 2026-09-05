@@ -20,6 +20,26 @@ import numpy as np
 
 _WEIGHTS = {"hand": 0.40, "rain_72h": 0.30, "slope": 0.15, "dist_stream": 0.10, "drainage": 0.05}
 
+# Per-hazard-type re-weighting of the SAME five real terrain/rainfall
+# inputs - not new data, just which physical driver matters most for
+# each hazard. Each set sums to 1.0. Reasoning:
+#   cyclone: storm surge + heavy rain onto a low coastal floodplain -
+#     elevation (hand) dominates, matches the Titli default above.
+#   flood (riverine/monsoon): rainfall and river proximity matter about
+#     as much as elevation - flooding builds up over the event, not a
+#     single surge.
+#   urban_flooding: drainage capacity (or its absence) is the deciding
+#     factor in a built-up area, far more than in open floodplain -
+#     given a 5x weight vs the cyclone default.
+#   landslide: fundamentally a slope-stability problem, not a
+#     low-elevation one - slope dominates, elevation barely matters.
+DISASTER_WEIGHTS: dict[str, dict[str, float]] = {
+    "cyclone": {"hand": 0.40, "rain_72h": 0.30, "slope": 0.15, "dist_stream": 0.10, "drainage": 0.05},
+    "flood": {"hand": 0.35, "rain_72h": 0.35, "slope": 0.10, "dist_stream": 0.15, "drainage": 0.05},
+    "urban_flooding": {"hand": 0.25, "rain_72h": 0.30, "slope": 0.10, "dist_stream": 0.10, "drainage": 0.25},
+    "landslide": {"hand": 0.10, "rain_72h": 0.25, "slope": 0.50, "dist_stream": 0.05, "drainage": 0.10},
+}
+
 
 def _minmax_norm(values: np.ndarray, low_pct: float = 5.0, high_pct: float = 95.0) -> np.ndarray:
     """Min-max normalisation against the [low_pct, high_pct] percentile
@@ -43,13 +63,15 @@ def compute_heuristic_risk(
     slope_deg: np.ndarray,
     dist_stream_m: np.ndarray,
     drainage_penalty: np.ndarray,
+    weights: dict[str, float] | None = None,
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    w = weights or _WEIGHTS
     contributions = {
-        "hand": _WEIGHTS["hand"] * (1.0 - _minmax_norm(hand)),
-        "rain_72h": _WEIGHTS["rain_72h"] * _minmax_norm(rain_72h),
-        "slope": _WEIGHTS["slope"] * (1.0 - _minmax_norm(slope_deg)),
-        "dist_stream": _WEIGHTS["dist_stream"] * (1.0 - _minmax_norm(dist_stream_m)),
-        "drainage": _WEIGHTS["drainage"] * np.asarray(drainage_penalty, dtype=float),
+        "hand": w["hand"] * (1.0 - _minmax_norm(hand)),
+        "rain_72h": w["rain_72h"] * _minmax_norm(rain_72h),
+        "slope": w["slope"] * (1.0 - _minmax_norm(slope_deg)),
+        "dist_stream": w["dist_stream"] * (1.0 - _minmax_norm(dist_stream_m)),
+        "drainage": w["drainage"] * np.asarray(drainage_penalty, dtype=float),
     }
     risk_score = sum(contributions.values())
     return risk_score, contributions

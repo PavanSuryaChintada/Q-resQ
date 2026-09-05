@@ -14,7 +14,7 @@ import random
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from models import RequestCategory, RequestCreate, RequestOut, SeedResult, UnitKind, UnitOut
 from routers import log as log_router
@@ -39,11 +39,34 @@ _UNIT_LABELS: list[tuple[str, UnitKind, int]] = [
 ]
 
 _CATEGORIES: list[RequestCategory] = ["medical", "stranded", "evacuation"]
-_CATEGORY_WEIGHTS = [0.20, 0.50, 0.30]  # per docs BUILD_SPEC.md seed/titli.py
+
+# Request category mix per hazard type - same real Srikakulam geography
+# and terrain (risk/heuristic.py:DISASTER_WEIGHTS re-weights the risk
+# map for these same types), but who calls for what differs by hazard:
+#   cyclone: storm surge strands people waiting for boats - the
+#     BUILD_SPEC.md default.
+#   flood: gradual rise, fewer emergency evacuations mid-event, more
+#     people just stuck in place.
+#   urban_flooding: more medical calls (traffic, electrocution risk)
+#     and stranded vehicles, fewer full evacuations.
+#   landslide: sudden-onset and structurally dangerous - much higher
+#     evacuation share, less "wait it out."
+_CATEGORY_WEIGHTS_BY_TYPE: dict[str, list[float]] = {
+    "cyclone": [0.20, 0.50, 0.30],
+    "flood": [0.20, 0.60, 0.20],
+    "urban_flooding": [0.30, 0.55, 0.15],
+    "landslide": [0.35, 0.15, 0.50],
+}
 
 
 @router.post("/titli", response_model=SeedResult)
-def seed_titli(n_requests: int = 30, seed: int = 11102018) -> SeedResult:
+def seed_titli(n_requests: int = 30, seed: int = 11102018, disaster_type: str = "cyclone") -> SeedResult:
+    if disaster_type not in _CATEGORY_WEIGHTS_BY_TYPE:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown disaster_type {disaster_type!r}, expected one of {list(_CATEGORY_WEIGHTS_BY_TYPE)}",
+        )
+    category_weights = _CATEGORY_WEIGHTS_BY_TYPE[disaster_type]
     rng = random.Random(seed)
 
     units_store.clear()
@@ -64,14 +87,14 @@ def seed_titli(n_requests: int = 30, seed: int = 11102018) -> SeedResult:
             id=request_id,
             location=(rng.uniform(*_LAT_RANGE), rng.uniform(*_LON_RANGE)),
             people_count=rng.randint(1, 8),
-            category=rng.choices(_CATEGORIES, weights=_CATEGORY_WEIGHTS)[0],
+            category=rng.choices(_CATEGORIES, weights=category_weights)[0],
             created_at=datetime.now(timezone.utc),
         )
         requests_store[request_id] = RequestOut(**payload.model_dump(), status="open", severity=severity)
 
     log_router.append(
         "system",
-        f"seeded titli scenario · {len(_UNIT_LABELS)} units · {n_requests} requests",
+        f"seeded {disaster_type} scenario · {len(_UNIT_LABELS)} units · {n_requests} requests",
     )
 
     return SeedResult(status="seeded", units_created=len(_UNIT_LABELS), requests_created=n_requests)

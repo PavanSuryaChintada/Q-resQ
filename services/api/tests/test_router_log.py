@@ -77,4 +77,8 @@ def test_request_intake_writes_a_ledger_line():
     })
 
     lines = client.get("/log").json()
-    assert any(line["channel"] == "intake" and str(request_id) in line["message"] for line in lines)
+    # the ledger truncates ids to an 8-char prefix (not the raw UUID) -
+    # see routers/requests.py's log_router.append call
+    assert any(
+        line["channel"] == "intake" and str(request_id)[:8] in line["message"] for line in lines
+    )

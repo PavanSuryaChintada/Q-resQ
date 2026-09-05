@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { Backend, BenchmarkRow } from "../lib/api"
+import type { Backend, BenchmarkRow, DisasterType } from "../lib/api"
 import { useRunBenchmark, useSeedTitli, useSolveDispatch } from "../lib/hooks"
 
 const BACKENDS: Backend[] = ["greedy", "annealing", "ortools", "qaoa"]
@@ -7,6 +7,7 @@ const BACKENDS: Backend[] = ["greedy", "annealing", "ortools", "qaoa"]
 interface Props {
   showRoutes: boolean
   onToggleRoutes: () => void
+  disasterType: DisasterType
 }
 
 function GroupLabel({ children }: { children: string }) {
@@ -17,12 +18,14 @@ function GroupLabel({ children }: { children: string }) {
   )
 }
 
-export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
+export function DispatchControls({ showRoutes, onToggleRoutes, disasterType }: Props) {
   const [backend, setBackend] = useState<Backend>("greedy")
   const solve = useSolveDispatch()
   const benchmark = useRunBenchmark()
   const seed = useSeedTitli()
   const [rows, setRows] = useState<BenchmarkRow[] | null>(null)
+  const [resultsOpen, setResultsOpen] = useState(true)
+  const hasResults = Boolean(solve.data || rows)
 
   return (
     <div className="border-t border-ground-300 bg-ground-100">
@@ -36,11 +39,11 @@ export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
         <div className="flex items-center">
           <GroupLabel>Scenario</GroupLabel>
           <button
-            onClick={() => seed.mutate(30)}
+            onClick={() => seed.mutate({ n_requests: 30, disasterType })}
             disabled={seed.isPending}
             className="h-6 px-2 bg-ground-300 border border-ground-400 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-400 disabled:opacity-50"
           >
-            {seed.isPending ? "Seeding..." : "Seed Titli"}
+            {seed.isPending ? "Seeding..." : "Seed scenario"}
           </button>
         </div>
 
@@ -92,9 +95,18 @@ export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
             {benchmark.isPending ? "Benchmarking..." : "Benchmark (incl. qaoa)"}
           </button>
         </div>
+
+        {hasResults && (
+          <button
+            onClick={() => setResultsOpen((o) => !o)}
+            className="ml-auto h-6 px-2 bg-transparent border border-ground-300 text-ink-300 text-[11px] font-display uppercase tracking-wide hover:bg-ground-200"
+          >
+            {resultsOpen ? "Hide results ▾" : "Show results ▸"}
+          </button>
+        )}
       </div>
 
-      {solve.data && (
+      {resultsOpen && solve.data && (
         <div className="px-3 py-2 text-[12px] font-data text-ink-100 border-t border-ground-300">
           round {solve.data.id.slice(0, 8)} · {solve.data.assignments.length} assignments ·{" "}
           {solve.data.backend}
@@ -102,7 +114,7 @@ export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
         </div>
       )}
 
-      {rows && (
+      {resultsOpen && rows && (
         <table className="w-full text-[12px] font-data border-t border-ground-300">
           <thead className="text-ink-200 text-[10px] uppercase font-display bg-ground-200">
             <tr>

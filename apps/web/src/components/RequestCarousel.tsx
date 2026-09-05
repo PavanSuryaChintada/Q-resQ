@@ -1,11 +1,13 @@
-import { useState } from "react"
-import type { RequestOut } from "../lib/api"
+import { useEffect, useState } from "react"
+import type { RequestOut, UnitOut } from "../lib/api"
+import { useAssignUnit } from "../lib/hooks"
 
 const SEV_COLORS = ["#4A5D52", "#C9A227", "#D97B1F", "#C23B22", "#7A1E14"]
 const SEV_LABEL = ["Normal", "Watch", "Alert", "Warning", "Severe"]
 
 interface Props {
   requests: RequestOut[]
+  units: UnitOut[]
   onRequestSelect: (requestId: string) => void
   selectedRequestId: string | null
   onSwitchView: () => void
@@ -27,8 +29,17 @@ function PanelHeader({ onSwitchView }: { onSwitchView: () => void }) {
   )
 }
 
-export function RequestCarousel({ requests, onRequestSelect, selectedRequestId, onSwitchView }: Props) {
+export function RequestCarousel({ requests, units, onRequestSelect, selectedRequestId, onSwitchView }: Props) {
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [selectedUnitId, setSelectedUnitId] = useState("")
+  const assignUnit = useAssignUnit()
+  const availableUnits = units.filter((u) => u.status === "available")
+
+  useEffect(() => {
+    setSelectedUnitId("")
+    assignUnit.reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex])
 
   if (!requests || requests.length === 0) {
     return (
@@ -56,8 +67,12 @@ export function RequestCarousel({ requests, onRequestSelect, selectedRequestId, 
   }
 
   const handleGoToLocation = () => {
-    console.log("Go to location clicked for request:", currentRequest.id, "location:", currentRequest.location)
     onRequestSelect(currentRequest.id)
+  }
+
+  const handleAllocate = () => {
+    if (!selectedUnitId) return
+    assignUnit.mutate({ requestId: currentRequest.id, unitId: selectedUnitId })
   }
 
   return (
@@ -89,6 +104,41 @@ export function RequestCarousel({ requests, onRequestSelect, selectedRequestId, 
           </button>
         </div>
       </div>
+
+      {currentRequest.status === "open" && (
+        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-ground-300">
+          <span className="font-display text-[10px] uppercase tracking-[0.1em] text-ink-300">Allocate</span>
+          <select
+            value={selectedUnitId}
+            onChange={(e) => setSelectedUnitId(e.target.value)}
+            className="flex-1 bg-ground-300 text-ink-000 font-data text-[12px] h-6 px-1 border border-ground-400"
+          >
+            <option value="">
+              {availableUnits.length === 0 ? "No units available" : "Select a unit..."}
+            </option>
+            {availableUnits.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.kind.toUpperCase()} · {u.label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleAllocate}
+            disabled={!selectedUnitId || assignUnit.isPending}
+            className="h-6 px-3 bg-ground-300 border border-ground-400 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-400 disabled:opacity-50"
+          >
+            {assignUnit.isPending ? "Allocating..." : "Allocate"}
+          </button>
+        </div>
+      )}
+      {assignUnit.isSuccess && (
+        <p className="text-[11px] text-ink-200 mb-3 -mt-2">Unit dispatched to this request.</p>
+      )}
+      {assignUnit.isError && (
+        <p className="text-[11px] text-sev-3 mb-3 -mt-2">
+          {assignUnit.error instanceof Error ? assignUnit.error.message : "Could not allocate that unit."}
+        </p>
+      )}
 
       <div className={`border bg-ground-000 p-3 ${isSelected ? "border-ink-000" : "border-ground-300"}`}>
         <div className="flex items-center gap-2 mb-2">

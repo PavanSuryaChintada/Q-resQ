@@ -1,3 +1,5 @@
+import { CollapsiblePanel } from "./CollapsiblePanel"
+
 const BANDS = [
   { label: "Normal", color: "#4A5D52" },
   { label: "Watch", color: "#C9A227" },
@@ -8,12 +10,7 @@ const BANDS = [
 
 export function LayersPanel() {
   return (
-    <div className="border-b border-ground-300">
-      <div className="h-8 flex items-center px-3 bg-ground-200 border-b border-ground-300">
-        <span className="font-display font-semibold text-[11px] uppercase tracking-[0.12em] text-ink-200">
-          Risk
-        </span>
-      </div>
+    <CollapsiblePanel title="Risk">
       <div className="px-3 py-2">
         {BANDS.map((b, i) => (
           <div key={b.label} className="flex items-center gap-2 py-0.5">
@@ -23,6 +20,6 @@ export function LayersPanel() {
           </div>
         ))}
       </div>
-    </div>
+    </CollapsiblePanel>
   )
 }

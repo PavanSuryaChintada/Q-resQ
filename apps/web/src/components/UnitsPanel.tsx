@@ -1,4 +1,5 @@
 import { useUnits } from "../lib/hooks"
+import { CollapsiblePanel } from "./CollapsiblePanel"
 
 const STATUS_COLOR: Record<string, string> = {
   available: "#5C8A6E",
@@ -10,15 +11,11 @@ const STATUS_COLOR: Record<string, string> = {
 
 export function UnitsPanel() {
   const { data: units } = useUnits()
+  const available = (units ?? []).filter((u) => u.status === "available").length
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col border-t border-ground-300">
-      <div className="h-8 flex items-center px-3 bg-ground-200 border-b border-ground-300">
-        <span className="font-display font-semibold text-[11px] uppercase tracking-[0.12em] text-ink-200">
-          Units
-        </span>
-      </div>
-      <div className="flex-1 overflow-y-auto">
+    <CollapsiblePanel title="Units" badge={units ? `${available}/${units.length} available` : undefined}>
+      <div className="max-h-[280px] overflow-y-auto">
         {(units ?? []).map((u) => (
           <div key={u.id} className="flex items-center gap-2 px-3 py-1.5 border-b border-ground-300/50 text-[13px]">
             <span
@@ -30,6 +27,6 @@ export function UnitsPanel() {
           </div>
         ))}
       </div>
-    </div>
+    </CollapsiblePanel>
   )
 }

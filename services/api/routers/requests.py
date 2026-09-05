@@ -71,7 +71,7 @@ def _upsert(payload: RequestCreate) -> RequestOut:
     )
     _store[payload.id] = out
     if existing is None:
-        log_router.append("intake", f"{payload.id} queued")
+        log_router.append("intake", f"request {str(payload.id)[:8]} queued")
     return out
 
 

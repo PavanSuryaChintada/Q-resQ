@@ -17,7 +17,7 @@ RequestCategory = Literal["medical", "stranded", "evacuation"]
 RequestStatus = Literal["open", "assigned", "in_progress", "resolved", "cancelled"]
 UnitKind = Literal["boat", "ambulance", "truck", "team"]
 UnitStatus = Literal["available", "assigned", "en_route", "returning", "offline"]
-Backend = Literal["qaoa", "annealing", "ortools", "greedy"]
+Backend = Literal["qaoa", "annealing", "ortools", "greedy", "manual"]
 LogChannel = Literal["risk", "intake", "dispatch", "road", "system"]
 
 
@@ -61,6 +61,21 @@ class RiskCellDetail(BaseModel):
     risk_score: float
     risk_band: int
     top_features: list[FeatureContribution]
+
+
+class LiveRiskRangeOut(BaseModel):
+    min_date: str
+    max_date: str
+
+
+class LiveRiskOut(BaseModel):
+    date: str
+    rain_72h_mm: float
+    max_band: int
+    elevated_cell_count: int
+    total_cells: int
+    verdict: str
+    note: str
 
 
 # --- requests -----------------------------------------------------------
@@ -113,6 +128,11 @@ class DispatchSolveRequest(BaseModel):
     timeout_s: float = 10.0
 
 
+class ManualAssignRequest(BaseModel):
+    request_id: UUID
+    unit_id: UUID
+
+
 class AssignmentOut(BaseModel):
     id: UUID
     unit_id: UUID
@@ -120,6 +140,7 @@ class AssignmentOut(BaseModel):
     zone_id: int | None = None
     travel_s: int | None = None
     route: dict | None = None  # GeoJSON LineString for unit->request path
+    route_source: Literal["road", "direct"] | None = None
 
 
 class DispatchRoundOut(BaseModel):

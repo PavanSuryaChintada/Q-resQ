@@ -1,7 +1,13 @@
 # Pinned per docs/TRD.md #9. Do not upgrade without updating both files.
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-pydantic==2.10.4
+# 2.10.4 was the original pin, but supabase==2.31.0 pulls in realtime,
+# which requires pydantic>=2.11.7 - this went unnoticed locally because
+# the dev venv already had a newer pydantic installed as a transitive
+# dep and the pin was never actually re-enforced. Pinned exactly to
+# 2.13.5 here since that's the version verified working end-to-end
+# (full test suite, live app) - not just anything in-range.
+pydantic==2.13.5
 # supabase-py bumped from the originally pinned 2.11.0: that version
 # validates SUPABASE_KEY against a JWT-shape regex and rejects
 # Supabase's newer sb_publishable_/sb_secret_ key format outright.
