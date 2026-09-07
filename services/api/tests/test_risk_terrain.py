@@ -8,8 +8,8 @@ from rasterio.transform import from_origin
 from shapely.geometry import LineString, Point
 
 from risk.terrain import (
-    _slope_from_array, build_grid, compute_hand, compute_slope, compute_stream_distance,
-    compute_twi, dist_to_stream,
+    _slope_from_array, aspect_components, build_grid, compute_flow_accumulation, compute_hand,
+    compute_slope, compute_stream_distance, compute_twi, curvature, dist_to_stream, ls_factor,
 )
 
 
@@ -157,3 +157,74 @@ def test_dist_to_stream_returns_nan_when_no_waterways_present():
     distances = dist_to_stream(grid, empty_waterways)
 
     assert np.isnan(distances[0])
+
+
+def test_aspect_components_are_a_unit_vector_everywhere(tmp_path):
+    size = 10
+    # a ramp, not flat, so aspect is well-defined at every interior cell
+    dem = np.array([[float(j) for j in range(size)] for _ in range(size)], dtype="float32")
+    dem_path = tmp_path / "ramp.tif"
+    _write_synthetic_dem(dem_path, dem)
+
+    aspect_sin, aspect_cos = aspect_components(str(dem_path))
+
+    assert aspect_sin.shape == (size, size)
+    assert aspect_cos.shape == (size, size)
+    magnitude = aspect_sin ** 2 + aspect_cos ** 2
+    assert np.allclose(magnitude, 1.0, atol=1e-6)
+
+
+def test_curvature_is_near_zero_on_a_perfectly_planar_ramp(tmp_path):
+    # a linear ramp has zero second derivative everywhere -> both
+    # curvatures should be ~0 in the interior (edges use one-sided
+    # finite differences and are noisier, so check the interior only)
+    size = 12
+    dem = np.array([[float(i + j) for j in range(size)] for i in range(size)], dtype="float32")
+    dem_path = tmp_path / "planar.tif"
+    _write_synthetic_dem(dem_path, dem)
+
+    plan, profile = curvature(str(dem_path))
+
+    assert plan.shape == (size, size)
+    assert profile.shape == (size, size)
+    interior_plan = plan[2:-2, 2:-2]
+    interior_profile = profile[2:-2, 2:-2]
+    assert np.allclose(interior_plan[~np.isnan(interior_plan)], 0.0, atol=1e-3)
+    assert np.allclose(interior_profile[~np.isnan(interior_profile)], 0.0, atol=1e-3)
+
+
+def test_curvature_is_nan_on_perfectly_flat_terrain(tmp_path):
+    # p (squared gradient magnitude) is exactly 0 everywhere on a flat
+    # DEM - curvature is undefined there, not zero, and must say so
+    dem = np.zeros((10, 10), dtype="float32")
+    dem_path = tmp_path / "flat.tif"
+    _write_synthetic_dem(dem_path, dem)
+
+    plan, profile = curvature(str(dem_path))
+
+    assert np.all(np.isnan(plan))
+    assert np.all(np.isnan(profile))
+
+
+def test_ls_factor_increases_with_slope_and_flow_accumulation():
+    slope_deg = np.array([5.0, 5.0, 30.0])
+    flow_acc = np.array([10.0, 1000.0, 1000.0])
+
+    ls = ls_factor(slope_deg, flow_acc, cell_size_m=30.0)
+
+    assert ls.shape == (3,)
+    assert ls[1] > ls[0]  # more upslope accumulation -> higher LS at the same slope
+    assert ls[2] > ls[1]  # steeper slope, same accumulation -> higher LS
+
+
+def test_compute_flow_accumulation_is_at_least_one_everywhere(tmp_path):
+    size = 12
+    dem = np.array([[float(size - i) for _ in range(size)] for i in range(size)], dtype="float32")
+    dem_path = tmp_path / "valley.tif"
+    _write_synthetic_dem(dem_path, dem)
+
+    acc = compute_flow_accumulation(str(dem_path))
+
+    assert acc.shape == (size, size)
+    assert np.all(acc >= 1.0)  # every cell accumulates at least itself
+    assert acc[-1, 1:-1].mean() > acc[0, 1:-1].mean()  # outlet row accumulates more than the source row

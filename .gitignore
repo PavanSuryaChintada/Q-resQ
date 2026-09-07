@@ -18,8 +18,8 @@ build/
 
 # Node / web
 node_modules/
-apps/web/dist/
-apps/web/.vite/
+apps/admin/dist/
+apps/admin/.vite/
 *.local
 
 # Data / models — large, regenerable, not source
@@ -36,7 +36,10 @@ services/api/data/raw/*
 !services/api/data/raw/risk_cells_cache*.npy
 !services/api/data/raw/risk_terrain_cache.npy
 services/api/models/*.txt
-apps/web/public/tiles/*.pmtiles
+apps/admin/public/tiles/*.pmtiles
+
+# osmnx's HTTP response cache (services/api/ingest/osm.py)
+services/api/cache/
 
 # OS / editor
 .DS_Store

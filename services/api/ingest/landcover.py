@@ -1,6 +1,8 @@
 """ESA WorldCover 10m via Planetary Computer. Clips to bbox, then
-derives an imperviousness (built-up fraction) raster at the same
-250m grid the risk model uses - feeds the urban-flood layer.
+derives a forest-cover fraction raster at the region's risk grid
+(services/api/config.py:REGION["grid_m"]) - vegetation root cohesion
+matters for slope stability (docs/DATA.md #8, docs/TRAINING.md #2's
+forest_frac feature).
 """
 
 from __future__ import annotations
@@ -14,13 +16,14 @@ import rasterio
 import rioxarray
 from rioxarray.merge import merge_arrays
 
+from config import REGION
 from ingest.config import BBOX, DATA_RAW_DIR, PLANETARY_COMPUTER_STAC_URL
 
 LANDCOVER_OUTPUT = DATA_RAW_DIR / "landcover.tif"
-IMPERVIOUSNESS_OUTPUT = DATA_RAW_DIR / "imperviousness.tif"
+FOREST_FRAC_OUTPUT = DATA_RAW_DIR / "forest_frac.tif"
 
-BUILT_UP_CLASS = 50  # ESA WorldCover class code
-RISK_GRID_CELL_M = 250.0
+TREE_COVER_CLASS = 10  # ESA WorldCover class code
+RISK_GRID_CELL_M = float(REGION["grid_m"])
 _METERS_PER_DEGREE_LAT = 111_320.0
 
 
@@ -67,31 +70,31 @@ def fetch_landcover(force: bool = False) -> None:
         print(f"[landcover] wrote {LANDCOVER_OUTPUT} shape={ds.shape} res={ds.res}")
 
 
-def derive_imperviousness(force: bool = False) -> None:
-    if IMPERVIOUSNESS_OUTPUT.exists() and not force:
-        print(f"[landcover] {IMPERVIOUSNESS_OUTPUT} already exists, skipping (use --force to refetch)")
+def derive_forest_fraction(force: bool = False) -> None:
+    if FOREST_FRAC_OUTPUT.exists() and not force:
+        print(f"[landcover] {FOREST_FRAC_OUTPUT} already exists, skipping (use --force to refetch)")
         return
     if not LANDCOVER_OUTPUT.exists():
         print(f"[landcover] {LANDCOVER_OUTPUT} not found - run fetch_landcover first")
         return
 
-    print("[landcover] deriving imperviousness (built-up fraction) at the 250m risk grid")
+    print(f"[landcover] deriving forest-cover fraction at the {int(RISK_GRID_CELL_M)}m risk grid")
     with rasterio.open(LANDCOVER_OUTPUT) as src:
         landcover = src.read(1)
         transform = src.transform
         crs = src.crs
         mean_lat = (src.bounds.top + src.bounds.bottom) / 2
 
-    is_built_up = (landcover == BUILT_UP_CLASS).astype(np.float32)
+    is_tree_cover = (landcover == TREE_COVER_CLASS).astype(np.float32)
 
     src_res_deg = abs(transform.a)
     meters_per_deg_lon = _METERS_PER_DEGREE_LAT * np.cos(np.radians(mean_lat))
     src_res_m = src_res_deg * meters_per_deg_lon
     block = max(1, round(RISK_GRID_CELL_M / src_res_m))
 
-    n_rows_out = is_built_up.shape[0] // block
-    n_cols_out = is_built_up.shape[1] // block
-    trimmed = is_built_up[: n_rows_out * block, : n_cols_out * block]
+    n_rows_out = is_tree_cover.shape[0] // block
+    n_cols_out = is_tree_cover.shape[1] // block
+    trimmed = is_tree_cover[: n_rows_out * block, : n_cols_out * block]
     fraction = trimmed.reshape(n_rows_out, block, n_cols_out, block).mean(axis=(1, 3))
 
     out_transform = rasterio.Affine(
@@ -99,19 +102,19 @@ def derive_imperviousness(force: bool = False) -> None:
         transform.d, transform.e * block, transform.f,
     )
     with rasterio.open(
-        IMPERVIOUSNESS_OUTPUT, "w", driver="GTiff",
+        FOREST_FRAC_OUTPUT, "w", driver="GTiff",
         height=fraction.shape[0], width=fraction.shape[1], count=1,
         dtype="float32", crs=crs, transform=out_transform, nodata=-9999.0,
     ) as dst:
         dst.write(fraction.astype("float32"), 1)
 
-    print(f"[landcover] wrote {IMPERVIOUSNESS_OUTPUT} shape={fraction.shape} "
-          f"mean imperviousness={fraction.mean():.4f}")
+    print(f"[landcover] wrote {FOREST_FRAC_OUTPUT} shape={fraction.shape} "
+          f"mean forest_frac={fraction.mean():.4f}")
 
 
 def fetch(force: bool = False) -> None:
     fetch_landcover(force=force)
-    derive_imperviousness(force=force)
+    derive_forest_fraction(force=force)
 
 
 if __name__ == "__main__":

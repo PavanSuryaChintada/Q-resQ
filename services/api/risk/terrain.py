@@ -36,6 +36,99 @@ def compute_slope(dem_path: str) -> np.ndarray:
     return _slope_from_array(dem, px_size_x_m, px_size_y_m)
 
 
+def aspect_components(dem_path: str) -> tuple[np.ndarray, np.ndarray]:
+    """(sin(aspect), cos(aspect)) - aspect is circular, so it is NEVER
+    returned or stored as raw degrees. 359deg and 1deg are one degree
+    apart; a model fed the raw value would treat them as maximally
+    distant. See docs/TRAINING.md #0 trap 3.
+
+    Aspect convention: compass bearing of steepest downslope direction,
+    0=north, 90=east (standard GIS convention, matching gdaldem aspect).
+    """
+    with rasterio.open(dem_path) as dataset:
+        dem = dataset.read(1).astype(float)
+        transform = dataset.transform
+        mean_lat_deg = (dataset.bounds.top + dataset.bounds.bottom) / 2.0
+
+    meters_per_deg_lon = _METERS_PER_DEGREE_LAT * math.cos(math.radians(mean_lat_deg))
+    px_size_x_m = abs(transform.a) * meters_per_deg_lon
+    px_size_y_m = abs(transform.e) * _METERS_PER_DEGREE_LAT
+    gy, gx = np.gradient(dem, px_size_y_m, px_size_x_m)
+
+    # aspect = atan2(dz/dy, -dz/dx), compass convention (0=north, cw+)
+    aspect_rad = np.arctan2(gy, -gx)
+    return np.sin(aspect_rad), np.cos(aspect_rad)
+
+
+def curvature(dem_path: str) -> tuple[np.ndarray, np.ndarray]:
+    """(plan_curvature, profile_curvature), Zevenbergen & Thorne (1987).
+
+    Profile curvature is along the slope direction - concave (negative
+    here) accelerates flow downslope. Plan curvature is across the
+    slope - concave concentrates flow laterally into hollows. Concave
+    profile curvature is a strong landslide predictor (docs/TRD.md #3):
+    subsurface flow concentrates there, raising pore pressure.
+    """
+    with rasterio.open(dem_path) as dataset:
+        dem = dataset.read(1).astype(float)
+        transform = dataset.transform
+        mean_lat_deg = (dataset.bounds.top + dataset.bounds.bottom) / 2.0
+
+    meters_per_deg_lon = _METERS_PER_DEGREE_LAT * math.cos(math.radians(mean_lat_deg))
+    px_size_x_m = abs(transform.a) * meters_per_deg_lon
+    px_size_y_m = abs(transform.e) * _METERS_PER_DEGREE_LAT
+
+    zy, zx = np.gradient(dem, px_size_y_m, px_size_x_m)
+    zyy, zyx = np.gradient(zy, px_size_y_m, px_size_x_m)
+    zxy, zxx = np.gradient(zx, px_size_y_m, px_size_x_m)
+    zxy_avg = (zxy + zyx) / 2.0
+
+    p = zx ** 2 + zy ** 2  # squared gradient magnitude
+    p_safe = np.where(p < 1e-9, 1e-9, p)
+
+    profile = -(zxx * zx ** 2 + 2 * zxy_avg * zx * zy + zyy * zy ** 2) / (p_safe * (1 + p) ** 1.5)
+    plan = -(zxx * zy ** 2 - 2 * zxy_avg * zx * zy + zyy * zx ** 2) / (p_safe ** 1.5)
+
+    # flat cells (p ~ 0): curvature is undefined, not zero - report as such
+    profile = np.where(p < 1e-9, np.nan, profile)
+    plan = np.where(p < 1e-9, np.nan, plan)
+    return plan, profile
+
+
+def ls_factor(slope_deg: np.ndarray, flow_accumulation: np.ndarray, cell_size_m: float) -> np.ndarray:
+    """LS factor (slope length x steepness), the RUSLE formulation
+    (Moore & Burch 1986): longer, steeper slopes accumulate more
+    driving force. flow_accumulation is cell count (e.g. from
+    grid.accumulation in compute_hand/compute_stream_distance), used
+    as a proxy for upslope contributing length.
+    """
+    slope_rad = np.radians(slope_deg)
+    upslope_length_m = np.sqrt(np.maximum(flow_accumulation, 0.0)) * cell_size_m
+    slope_factor = np.where(
+        slope_deg < 5.0,
+        10.8 * np.sin(slope_rad) + 0.03,
+        16.8 * np.sin(slope_rad) - 0.50,
+    )
+    return ((upslope_length_m / 22.13) ** 0.4) * (slope_factor)
+
+
+def compute_flow_accumulation(dem_path: str) -> np.ndarray:
+    """Cell-count flow accumulation from the conditioned DEM - the
+    ls_factor input. Same conditioning pipeline as compute_hand and
+    compute_stream_distance, exposed standalone since ls_factor needs
+    it directly rather than a HAND or distance value derived from it.
+    """
+    grid = Grid.from_raster(dem_path)
+    dem = grid.read_raster(dem_path)
+
+    pit_filled = grid.fill_pits(dem)
+    flooded = grid.fill_depressions(pit_filled)
+    inflated = grid.resolve_flats(flooded)
+
+    fdir = grid.flowdir(inflated)
+    return np.asarray(grid.accumulation(fdir), dtype=float)
+
+
 def compute_hand(dem_path: str, stream_accumulation_threshold: float = 1000.0) -> np.ndarray:
     """Height above nearest drainage. See BUILD_SPEC.md risk/terrain.py.
 
