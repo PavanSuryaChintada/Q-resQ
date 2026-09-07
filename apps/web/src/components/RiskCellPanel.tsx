@@ -1,12 +1,11 @@
-import type { DisasterType } from "../lib/api"
 import { useRiskCellDetail } from "../lib/hooks"
 import { CollapsiblePanel } from "./CollapsiblePanel"
 
 const SEV_BAND_COLOR = ["#4A5D52", "#C9A227", "#D97B1F", "#C23B22", "#7A1E14"]
 const SEV_BAND_LABEL = ["Normal", "Watch", "Alert", "Warning", "Severe"]
 
-export function RiskCellPanel({ cellId, disasterType }: { cellId: number | null; disasterType: DisasterType }) {
-  const { data: detail, isFetching } = useRiskCellDetail(cellId, disasterType)
+export function RiskCellPanel({ cellId }: { cellId: number | null }) {
+  const { data: detail, isFetching } = useRiskCellDetail(cellId)
 
   return (
     <CollapsiblePanel title="Cell detail" badge={detail ? SEV_BAND_LABEL[detail.risk_band] : undefined}>

@@ -1,13 +1,12 @@
 import { useState } from "react"
-import type { Backend, BenchmarkRow, DisasterType } from "../lib/api"
-import { useRunBenchmark, useSeedTitli, useSolveDispatch } from "../lib/hooks"
+import type { Backend, BenchmarkRow } from "../lib/api"
+import { useRunBenchmark, useSolveDispatch } from "../lib/hooks"
 
 const BACKENDS: Backend[] = ["greedy", "annealing", "ortools", "qaoa"]
 
 interface Props {
   showRoutes: boolean
   onToggleRoutes: () => void
-  disasterType: DisasterType
 }
 
 function GroupLabel({ children }: { children: string }) {
@@ -18,11 +17,10 @@ function GroupLabel({ children }: { children: string }) {
   )
 }
 
-export function DispatchControls({ showRoutes, onToggleRoutes, disasterType }: Props) {
+export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
   const [backend, setBackend] = useState<Backend>("greedy")
   const solve = useSolveDispatch()
   const benchmark = useRunBenchmark()
-  const seed = useSeedTitli()
   const [rows, setRows] = useState<BenchmarkRow[] | null>(null)
   const [resultsOpen, setResultsOpen] = useState(true)
   const hasResults = Boolean(solve.data || rows)
@@ -36,18 +34,6 @@ export function DispatchControls({ showRoutes, onToggleRoutes, disasterType }: P
       </div>
 
       <div className="flex items-center flex-wrap gap-x-4 gap-y-2 px-3 py-2">
-        <div className="flex items-center">
-          <GroupLabel>Scenario</GroupLabel>
-          <button
-            onClick={() => seed.mutate({ n_requests: 30, disasterType })}
-            disabled={seed.isPending}
-            className="h-6 px-2 bg-ground-300 border border-ground-400 text-ink-000 text-[11px] font-display uppercase tracking-wide hover:bg-ground-400 disabled:opacity-50"
-          >
-            {seed.isPending ? "Seeding..." : "Seed scenario"}
-          </button>
-        </div>
-
-        <span className="w-px h-5 bg-ground-300" />
 
         <div className="flex items-center">
           <GroupLabel>Map</GroupLabel>

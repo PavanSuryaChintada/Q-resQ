@@ -1,6 +1,5 @@
-"""Weighted physical risk index - the fallback when the SAR-labelled
-LightGBM model isn't available. No training, works immediately. See
-BUILD_SPEC.md and docs/TRD.md #3.
+"""Weighted physical risk index - the fallback when a trained model
+isn't available. No training, works immediately. See BUILD_SPEC.md.
 
     risk = 0.40*norm(1-hand) + 0.30*norm(rain_72h) + 0.15*norm(1-slope)
          + 0.10*norm(1-dist_stream) + 0.05*drainage_penalty
@@ -8,6 +7,12 @@ BUILD_SPEC.md and docs/TRD.md #3.
 Min-max normalisation is invariant to an additive constant, so
 norm(1-hand) and 1-norm(hand) are numerically identical - this
 implementation uses the latter form.
+
+These are still the flood-build's default weights, not yet retrained
+for landslide susceptibility - docs/TRAINING.md #6 is where the real
+NER heuristic (slope/curvature/cut-slope/lithology-led) replaces this
+formula. Kept as a single, honestly-labelled placeholder path rather
+than a multi-hazard switch, since NER has one dominant hazard.
 
 Returns the same shape as risk/model.py's predict(), plus per-term
 contributions so the cell detail panel works identically whichever
@@ -19,26 +24,6 @@ from __future__ import annotations
 import numpy as np
 
 _WEIGHTS = {"hand": 0.40, "rain_72h": 0.30, "slope": 0.15, "dist_stream": 0.10, "drainage": 0.05}
-
-# Per-hazard-type re-weighting of the SAME five real terrain/rainfall
-# inputs - not new data, just which physical driver matters most for
-# each hazard. Each set sums to 1.0. Reasoning:
-#   cyclone: storm surge + heavy rain onto a low coastal floodplain -
-#     elevation (hand) dominates, matches the Titli default above.
-#   flood (riverine/monsoon): rainfall and river proximity matter about
-#     as much as elevation - flooding builds up over the event, not a
-#     single surge.
-#   urban_flooding: drainage capacity (or its absence) is the deciding
-#     factor in a built-up area, far more than in open floodplain -
-#     given a 5x weight vs the cyclone default.
-#   landslide: fundamentally a slope-stability problem, not a
-#     low-elevation one - slope dominates, elevation barely matters.
-DISASTER_WEIGHTS: dict[str, dict[str, float]] = {
-    "cyclone": {"hand": 0.40, "rain_72h": 0.30, "slope": 0.15, "dist_stream": 0.10, "drainage": 0.05},
-    "flood": {"hand": 0.35, "rain_72h": 0.35, "slope": 0.10, "dist_stream": 0.15, "drainage": 0.05},
-    "urban_flooding": {"hand": 0.25, "rain_72h": 0.30, "slope": 0.10, "dist_stream": 0.10, "drainage": 0.25},
-    "landslide": {"hand": 0.10, "rain_72h": 0.25, "slope": 0.50, "dist_stream": 0.05, "drainage": 0.10},
-}
 
 
 def _minmax_norm(values: np.ndarray, low_pct: float = 5.0, high_pct: float = 95.0) -> np.ndarray:

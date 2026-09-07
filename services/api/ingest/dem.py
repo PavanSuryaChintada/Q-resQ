@@ -1,6 +1,6 @@
 """Copernicus DEM GLO-30 via Microsoft Planetary Computer STAC.
 
-Idempotent: skips if data/raw/dem_srikakulam.tif already exists,
+Idempotent: skips if data/raw/dem_aizawl.tif already exists,
 unless --force. No API key needed.
 """
 
@@ -17,7 +17,7 @@ from rioxarray.merge import merge_arrays
 
 from ingest.config import BBOX, DATA_RAW_DIR, PLANETARY_COMPUTER_STAC_URL
 
-OUTPUT_PATH = DATA_RAW_DIR / "dem_srikakulam.tif"
+OUTPUT_PATH = DATA_RAW_DIR / "dem_aizawl.tif"
 
 
 def fetch(force: bool = False) -> None:

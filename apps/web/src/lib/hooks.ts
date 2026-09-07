@@ -1,17 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { api, type Backend, type DisasterType } from "./api"
+import { api, type Backend } from "./api"
 
-export function useRiskCells(disasterType: DisasterType = "cyclone") {
+export function useRiskCells() {
   return useQuery({
-    queryKey: ["risk-cells", disasterType],
-    queryFn: () => api.riskCells(disasterType),
+    queryKey: ["risk-cells"],
+    queryFn: api.riskCells,
   })
 }
 
-export function useRiskCellDetail(id: number | null, disasterType: DisasterType = "cyclone") {
+export function useRiskCellDetail(id: number | null) {
   return useQuery({
-    queryKey: ["risk-cell", id, disasterType],
-    queryFn: () => api.riskCell(id as number, disasterType),
+    queryKey: ["risk-cell", id],
+    queryFn: () => api.riskCell(id as number),
     enabled: id !== null,
   })
 }
@@ -76,30 +76,6 @@ export function useRunBenchmark() {
   return useMutation({
     mutationFn: (backends?: Backend[]) => api.runBenchmark(backends),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["log"] })
-    },
-  })
-}
-
-export function useLiveRiskRange() {
-  return useQuery({ queryKey: ["live-risk-range"], queryFn: api.liveRiskRange, staleTime: 60_000 })
-}
-
-export function useLiveRisk() {
-  return useMutation({
-    mutationFn: ({ date, disasterType }: { date?: string; disasterType?: DisasterType }) =>
-      api.liveRisk(date, disasterType),
-  })
-}
-
-export function useSeedTitli() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ n_requests, disasterType }: { n_requests?: number; disasterType?: DisasterType }) =>
-      api.seedTitli(n_requests, disasterType),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["requests"] })
-      qc.invalidateQueries({ queryKey: ["units"] })
       qc.invalidateQueries({ queryKey: ["log"] })
     },
   })

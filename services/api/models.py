@@ -63,21 +63,6 @@ class RiskCellDetail(BaseModel):
     top_features: list[FeatureContribution]
 
 
-class LiveRiskRangeOut(BaseModel):
-    min_date: str
-    max_date: str
-
-
-class LiveRiskOut(BaseModel):
-    date: str
-    rain_72h_mm: float
-    max_band: int
-    elevated_cell_count: int
-    total_cells: int
-    verdict: str
-    note: str
-
-
 # --- requests -----------------------------------------------------------
 
 class RequestCreate(BaseModel):

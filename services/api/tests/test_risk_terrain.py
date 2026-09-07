@@ -14,7 +14,7 @@ from risk.terrain import (
 
 
 def _write_synthetic_dem(path, dem: np.ndarray, px_size_deg: float = 0.001,
-                          origin_lon: float = 83.9, origin_lat: float = 18.35,
+                          origin_lon: float = 92.9, origin_lat: float = 23.85,
                           nodata: float = -9999.0):
     transform = from_origin(origin_lon, origin_lat, px_size_deg, px_size_deg)
     with rasterio.open(
@@ -120,9 +120,9 @@ def test_compute_stream_distance_is_zero_on_stream_cells_and_grows_away_from_the
 
 
 def test_build_grid_covers_the_bbox_at_the_requested_resolution():
-    # a small bbox around Srikakulam town, ~2.2km x 2.2km at 250m cells
+    # a small bbox around Aizawl town, ~2.2km x 2.2km at 250m cells
     # -> expect roughly a 9x9 grid (some slop from degree/meter rounding)
-    west, south, east, north = 83.89, 18.29, 83.91, 18.31
+    west, south, east, north = 92.89, 23.89, 92.91, 23.91
     grid = build_grid((west, south, east, north), cell_m=250)
 
     assert isinstance(grid, gpd.GeoDataFrame)
@@ -138,10 +138,10 @@ def test_build_grid_covers_the_bbox_at_the_requested_resolution():
 
 def test_dist_to_stream_is_zero_on_the_line_and_positive_away_from_it():
     waterway = gpd.GeoDataFrame(
-        {"geometry": [LineString([(83.90, 18.20), (83.90, 18.40)])]}, crs="EPSG:4326",
+        {"geometry": [LineString([(92.90, 23.80), (92.90, 24.00)])]}, crs="EPSG:4326",
     )
     grid = gpd.GeoDataFrame(
-        {"geometry": [Point(83.90, 18.30), Point(83.95, 18.30)]}, crs="EPSG:4326",
+        {"geometry": [Point(92.90, 23.90), Point(92.95, 23.90)]}, crs="EPSG:4326",
     )
 
     distances = dist_to_stream(grid, waterway)
@@ -151,7 +151,7 @@ def test_dist_to_stream_is_zero_on_the_line_and_positive_away_from_it():
 
 
 def test_dist_to_stream_returns_nan_when_no_waterways_present():
-    grid = gpd.GeoDataFrame({"geometry": [Point(83.90, 18.30)]}, crs="EPSG:4326")
+    grid = gpd.GeoDataFrame({"geometry": [Point(92.90, 23.90)]}, crs="EPSG:4326")
     empty_waterways = gpd.GeoDataFrame({"geometry": []}, crs="EPSG:4326")
 
     distances = dist_to_stream(grid, empty_waterways)

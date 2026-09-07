@@ -6,17 +6,16 @@ import { DispatchLedger } from "./components/DispatchLedger"
 import { FlowPage } from "./components/FlowPage"
 import { Header } from "./components/Header"
 import { LayersPanel } from "./components/LayersPanel"
-import { LiveRiskPanel } from "./components/LiveRiskPanel"
 import { MapView } from "./components/MapView"
 import { RequestCarousel } from "./components/RequestCarousel"
 import { RequestsPanel } from "./components/RequestsPanel"
 import { RiskCellPanel } from "./components/RiskCellPanel"
 import { SolutionSummaryPage } from "./components/SolutionSummaryPage"
 import { UnitsPanel } from "./components/UnitsPanel"
-import type { DisasterType } from "./lib/api"
 import { useAssignments, useRequests, useRiskCells, useUnits } from "./lib/hooks"
 
-const DEMO_CENTER: [number, number] = [18.325, 83.9]
+// Aizawl district HQ - see services/api/config.py:REGION["hq"]
+const DEMO_CENTER: [number, number] = [23.7271, 92.7176]
 
 export default function App() {
   const [view, setView] = useState<"dashboard" | "architecture" | "flow" | "summary">("dashboard")
@@ -25,8 +24,7 @@ export default function App() {
   const [showRoutes, setShowRoutes] = useState(true)
   const [useCarousel, setUseCarousel] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
-  const [disasterType, setDisasterType] = useState<DisasterType>("cyclone")
-  const { data: riskCells } = useRiskCells(disasterType)
+  const { data: riskCells } = useRiskCells()
   const { data: units } = useUnits()
   const { data: requests } = useRequests()
   const { data: assignments } = useAssignments()
@@ -38,8 +36,6 @@ export default function App() {
         onViewChange={setView}
         guideOpen={showGuide}
         onToggleGuide={() => setShowGuide((v) => !v)}
-        disasterType={disasterType}
-        onDisasterTypeChange={setDisasterType}
       />
       {view === "architecture" ? (
         <ArchitecturePage />
@@ -56,8 +52,7 @@ export default function App() {
               </span>
             </div>
             <LayersPanel />
-            <LiveRiskPanel disasterType={disasterType} />
-            <RiskCellPanel cellId={selectedCellId} disasterType={disasterType} />
+            <RiskCellPanel cellId={selectedCellId} />
             <UnitsPanel />
           </div>
           <div className="flex-1 flex flex-col min-w-0">
@@ -77,7 +72,6 @@ export default function App() {
             <DispatchControls
               showRoutes={showRoutes}
               onToggleRoutes={() => setShowRoutes(!showRoutes)}
-              disasterType={disasterType}
             />
             <div className="h-[240px] shrink-0 flex flex-col border-t border-ground-300">
               {useCarousel ? (

@@ -3,8 +3,7 @@
 // must be set at build time to the deployed backend's full URL.
 const BASE = import.meta.env.VITE_API_URL || "/api"
 
-export type Backend = "qaoa" | "annealing" | "ortools" | "greedy"
-export type DisasterType = "cyclone" | "flood" | "urban_flooding" | "landslide"
+export type Backend = "qaoa" | "annealing" | "ortools" | "greedy" | "manual"
 
 export interface RiskCellProperties {
   id: number
@@ -109,27 +108,6 @@ export interface LogLine {
   message: string
 }
 
-export interface SeedResult {
-  status: "seeded"
-  units_created: number
-  requests_created: number
-}
-
-export interface LiveRiskRangeOut {
-  min_date: string
-  max_date: string
-}
-
-export interface LiveRiskOut {
-  date: string
-  rain_72h_mm: number
-  max_band: number
-  elevated_cell_count: number
-  total_cells: number
-  verdict: string
-  note: string
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -153,15 +131,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ status: string }>("/health"),
 
-  riskCells: (disasterType: DisasterType = "cyclone") =>
-    request<RiskCellCollection>(`/risk/cells?disaster_type=${disasterType}`),
-  riskCell: (id: number, disasterType: DisasterType = "cyclone") =>
-    request<RiskCellDetail>(`/risk/cell/${id}?disaster_type=${disasterType}`),
-  liveRisk: (date?: string, disasterType: DisasterType = "cyclone") =>
-    request<LiveRiskOut>(
-      `/risk/live?disaster_type=${disasterType}${date ? `&date=${date}` : ""}`,
-    ),
-  liveRiskRange: () => request<LiveRiskRangeOut>("/risk/live/range"),
+  riskCells: () => request<RiskCellCollection>("/risk/cells"),
+  riskCell: (id: number) => request<RiskCellDetail>(`/risk/cell/${id}`),
 
   requests: (status?: string) =>
     request<RequestOut[]>(`/requests${status ? `?status=${status}` : ""}`),
@@ -197,10 +168,4 @@ export const api = {
     }),
 
   log: (since?: number) => request<LogLine[]>(`/log${since ? `?since=${since}` : ""}`),
-
-  seedTitli: (n_requests = 30, disasterType: DisasterType = "cyclone") =>
-    request<SeedResult>(
-      `/seed/titli?n_requests=${n_requests}&disaster_type=${disasterType}`,
-      { method: "POST" },
-    ),
 }
