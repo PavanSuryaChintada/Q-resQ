@@ -1,10 +1,10 @@
 # Build context is the repo root (Railway: leave Root Directory blank,
-# set Dockerfile Path to apps/web/Dockerfile).
+# set Dockerfile Path to apps/admin/Dockerfile).
 FROM node:20-slim AS build
 WORKDIR /app
-COPY apps/web/package.json apps/web/package-lock.json* /app/
+COPY apps/admin/package.json apps/admin/package-lock.json* /app/
 RUN npm install
-COPY apps/web /app
+COPY apps/admin /app
 # VITE_API_URL must be set as a build-time variable in Railway (Vite
 # inlines env vars at build, not at container start) - the deployed
 # backend's public URL, e.g. https://q-resq-api.up.railway.app

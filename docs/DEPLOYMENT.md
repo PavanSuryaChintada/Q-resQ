@@ -25,13 +25,13 @@ git add services/api/data/raw/risk_cells_cache.npy \
 # the backend's Dockerfile (Railway's zero-config build is a real risk
 # given rasterio/pysheds/geopandas/qiskit-aer in requirements.txt).
 git add services/api/Dockerfile services/api/main.py \
-        services/api/risk/features.py apps/web/src/lib/api.ts .gitignore
+        services/api/risk/features.py apps/admin/src/lib/api.ts .gitignore
 
 git commit -m "Deployment: Dockerfile, CORS, precomputed risk caches"
 git push
 ```
 
-`apps/web/Dockerfile` and the root `.dockerignore` from an earlier Railway-only draft aren't needed for this path — Vercel doesn't look at them. Harmless to leave in the repo, just ignore them.
+`apps/admin/Dockerfile` and the root `.dockerignore` from an earlier Railway-only draft aren't needed for this path — Vercel doesn't look at them. Harmless to leave in the repo, just ignore them.
 
 ---
 
@@ -58,7 +58,7 @@ The second call is the one that actually proves the committed caches made it int
 ## 2. Frontend on Vercel
 
 1. **Add New Project → Import Git Repository** → same repo.
-2. **Root Directory: `apps/web`.** This is the one setting that matters — Vercel then treats `apps/web` as the project root and auto-detects Vite (build command `vite build` / `tsc -b && vite build` from `package.json`, output `dist`, both already correct with no changes needed).
+2. **Root Directory: `apps/admin`.** This is the one setting that matters — Vercel then treats `apps/admin` as the project root and auto-detects Vite (build command `vite build` / `tsc -b && vite build` from `package.json`, output `dist`, both already correct with no changes needed).
 3. **Environment Variables** → add:
    ```
    VITE_API_URL = https://q-resq-api-production.up.railway.app
@@ -85,7 +85,7 @@ Setting a variable triggers a redeploy automatically.
 - [ ] Open the Vercel URL — the map loads, no blank page
 - [ ] DevTools → Network tab — requests go to the Railway domain, not `/api/...` on Vercel's own origin (confirms `VITE_API_URL` actually baked into the build)
 - [ ] No CORS errors in the console (confirms `ALLOWED_ORIGINS` matches exactly)
-- [ ] Click **Seed scenario**, then **Dispatch** — a real round comes back, routes draw on the map
+- [ ] Click **Dispatch** against whatever requests/units are loaded — a real round comes back, routes draw on the map (the "Seed scenario" button was removed with the Srikakulam Titli fixtures; NER's `/seed/demo` isn't built yet — see `services/api/BUILD_SPEC.md` §9)
 
 ---
 
@@ -97,7 +97,7 @@ Setting a variable triggers a redeploy automatically.
 | Browser console: CORS error, no `Access-Control-Allow-Origin` header | `ALLOWED_ORIGINS` on Railway doesn't exactly match the Vercel domain — check for a trailing slash or `http` vs `https` mismatch. |
 | Railway build fails installing rasterio/geopandas/pysheds | Confirm the service is building from the Dockerfile (Settings → Build shows "Dockerfile", not "Nixpacks") and that **Root Directory is blank**, not `services/api` — a non-blank Root Directory breaks the build context the Dockerfile's `COPY packages/qubo-dispatch ...` line depends on. |
 | `/risk/cells` times out or 500s on first request | The precomputed `.npy` caches weren't committed. Run `git ls-files \| grep npy` — all 5 files from step 0 should be listed. If not, go back to step 0. |
-| Vercel build fails on `tsc -b` | Almost always a real type error, not a config problem — run `npx tsc --noEmit` locally in `apps/web` first and fix what it reports before redeploying. |
+| Vercel build fails on `tsc -b` | Almost always a real type error, not a config problem — run `npx tsc --noEmit` locally in `apps/admin` first and fix what it reports before redeploying. |
 
 ---
 
