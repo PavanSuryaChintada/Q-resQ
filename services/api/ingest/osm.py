@@ -22,12 +22,14 @@ ox.settings.overpass_url = "https://overpass.openstreetmap.fr/api"
 FACILITIES_PATH = DATA_RAW_DIR / "facilities.geojson"
 ROADS_PATH = DATA_RAW_DIR / "roads.geojson"
 WATERWAYS_PATH = DATA_RAW_DIR / "waterways.geojson"
+SETTLEMENTS_PATH = DATA_RAW_DIR / "settlements.geojson"
 
 FACILITY_AMENITIES = [
     "hospital", "clinic", "doctors", "school",
     "fire_station", "police", "community_centre", "shelter",
 ]
 WATERWAY_TYPES = ["river", "stream", "canal", "drain", "ditch"]
+SETTLEMENT_PLACE_TYPES = ["village", "hamlet", "town", "suburb", "neighbourhood"]
 
 _MAX_RETRIES = 3
 _RETRY_BACKOFF_S = 30
@@ -101,10 +103,29 @@ def fetch_waterways(force: bool = False) -> None:
     print(f"[osm] wrote {len(gdf)} waterway features to {WATERWAYS_PATH}")
 
 
+def fetch_settlements(force: bool = False) -> None:
+    if SETTLEMENTS_PATH.exists() and not force:
+        print(f"[osm] {SETTLEMENTS_PATH} already exists, skipping (use --force to refetch)")
+        return
+
+    print(f"[osm] fetching settlements (place in {SETTLEMENT_PLACE_TYPES})")
+    tags = {"place": SETTLEMENT_PLACE_TYPES}
+    gdf = _with_retry("settlements", lambda: ox.features_from_bbox(bbox=BBOX, tags=tags))
+    print(f"[osm] found {len(gdf)} raw settlement features")
+
+    gdf = gdf.copy()
+    gdf["geometry"] = gdf.geometry.centroid
+    keep = [c for c in ["name", "place", "population"] if c in gdf.columns]
+    gdf = gdf[keep + ["geometry"]]
+    gdf.to_file(SETTLEMENTS_PATH, driver="GeoJSON")
+    print(f"[osm] wrote {len(gdf)} settlements to {SETTLEMENTS_PATH}")
+
+
 def fetch(force: bool = False) -> None:
     fetch_facilities(force=force)
     fetch_roads(force=force)
     fetch_waterways(force=force)
+    fetch_settlements(force=force)
 
 
 if __name__ == "__main__":
