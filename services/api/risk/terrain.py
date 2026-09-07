@@ -15,7 +15,7 @@ from scipy.ndimage import distance_transform_edt
 from shapely.geometry import box
 
 _METERS_PER_DEGREE_LAT = 111_320.0
-_SRIKAKULAM_UTM_CRS = "EPSG:32644"  # UTM zone 44N - covers Srikakulam district
+_AIZAWL_UTM_CRS = "EPSG:32646"  # UTM zone 46N - covers Aizawl district, Mizoram
 
 
 def _slope_from_array(dem: np.ndarray, px_size_x_m: float, px_size_y_m: float) -> np.ndarray:
@@ -129,12 +129,12 @@ def build_grid(bbox: tuple[float, float, float, float], cell_m: float = 250.0) -
     grid = gpd.GeoDataFrame({"geometry": polygons}, crs="EPSG:4326")
     # centroid in a projected CRS, then back to EPSG:4326 for storage -
     # geographic-CRS centroids are imprecise (rasterio/geopandas warns)
-    grid["centroid"] = grid.geometry.to_crs(_SRIKAKULAM_UTM_CRS).centroid.to_crs("EPSG:4326")
+    grid["centroid"] = grid.geometry.to_crs(_AIZAWL_UTM_CRS).centroid.to_crs("EPSG:4326")
     return grid
 
 
 def dist_to_stream(grid: gpd.GeoDataFrame, waterways: gpd.GeoDataFrame,
-                    projected_crs: str = _SRIKAKULAM_UTM_CRS) -> np.ndarray:
+                    projected_crs: str = _AIZAWL_UTM_CRS) -> np.ndarray:
     """Nearest-neighbour distance in metres from each grid geometry to
     the waterway network. A missing key in the caller's feature matrix
     should treat a NaN result as unreachable-to-stream data, not zero.
