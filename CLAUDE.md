@@ -1,231 +1,131 @@
-# CLAUDE.md — Build Rules for PRAHARI
+# CLAUDE.md — Build Rules for Q-ResQ NER
 
 > Read this file completely before writing any code. It overrides your defaults.
-> Full specs live in `docs/`. This file is the contract.
+> Full specs are in `docs/`. Start with `docs/MIGRATION.md` — this is a pivot of an
+> existing codebase, not a new build.
 
 ---
 
 ## 1. What this is
 
-**PRAHARI** — a disaster prediction and rescue-dispatch platform, built in 24 hours for HackSprint 2.0 (AITAM, Tekkali).
+**Q-ResQ NER** — AI-based landslide early warning and risk monitoring for the North Eastern Region.
 
-The system does **two separate things**. Never conflate them:
+**Smart India Hackathon 2026 · Problem Statement 26001 · Ministry of DoNER**
 
-| | Problem | Method | Module |
-|---|---|---|---|
-| **A** | *Which areas will flood?* | Supervised ML on terrain + rainfall | `services/risk/` |
-| **B** | *Given 15 boats and 200 rescue calls, who goes where?* | Constrained combinatorial optimization (QUBO) | `services/dispatch/` |
+This is a pivot of an existing flood-dispatch platform (Q-ResQ, built for Srikakulam district). Roughly 60% of the codebase carries over. `docs/MIGRATION.md` states exactly what carries, what is retrained, and what is new. **Read it before touching anything.**
 
-Problem A is prediction. Problem B is decision-making. ML cannot do B — there is no labelled dataset of "optimal rescue decisions", and neural networks cannot enforce hard constraints. B is where the quantum work lives.
-
-**Demo scenario:** Cyclone Titli, Srikakulam district, Andhra Pradesh, 11 October 2018.
+**Demo geography:** Aizawl district, Mizoram.
+**Time budget: 6 days.** Every scope decision in these docs follows from that.
 
 ---
 
-## 2. Non-negotiable rules
+## 2. The three hard scope calls
 
-### 2.1 Never claim quantum advantage
-QAOA on a 20-qubit simulator does **not** beat OR-Tools. Anywhere the UI, README, or code comments mention quantum, the framing is:
+These are decisions, not oversights. If you find yourself building past them, stop.
 
-> "Quantum-ready hybrid dispatch. Benchmarked against classical solvers. Parity at current scale, hardware-ready formulation."
+### 2.1 InSAR is PRE-COMPUTED, not live
 
-If you generate copy claiming quantum is faster or better, you have introduced a bug. The benchmark table must show honest results **including losses**.
+Live SBAS interferometric processing takes days of compute and days of learning ISCE2/MintPy. It will not happen in six days.
 
-### 2.2 Quantum is never in the critical path
-The dispatch service must produce a valid assignment even if Qiskit is uninstalled, crashes, or times out. Solver selection is a runtime parameter with a hard fallback chain:
+**What we ship:** a deformation time series for **one corridor** in Aizawl, processed offline, loaded as a static dataset, and served through a live-looking API. The pipeline code exists and is documented; it just is not run on demand.
 
-```
-qaoa → (timeout 10s or exception) → simulated_annealing → (fail) → greedy
-```
+**What we say:** "Deformation time series pre-computed for the demo corridor. The processing pipeline is in the repo; live processing is a compute-scheduling problem, not an algorithmic one."
 
-`greedy` has no dependencies beyond stdlib and must never fail.
+Never claim live InSAR. Never fabricate deformation values for corridors that were not processed.
 
-### 2.3 Deploy from hour zero
-Before building features, get an empty FastAPI service on Railway and an empty Vite app on Vercel, both green. Teams die deploying at hour 20.
+### 2.2 One codebase for the citizen app
 
-### 2.4 Scope discipline
-Four features fully working beats nine features half-built:
-1. Risk map
-2. Prioritised dispatch (with solver benchmark)
-3. Offline request capture
-4. Operations dashboard
+PWA built with Vite, wrapped for Android with **Capacitor**. Not React Native. Not a second codebase.
 
-Anything else is cut. Do not add features not listed in `docs/PRD.md`.
+This gives a real installable `.apk` from the same source in about two hours of setup. If you find yourself writing Android-specific screens, stop — that is the wrong path for this timeline.
 
-### 2.5 No AI-slop visual design
-Read `docs/DESIGN.md` before writing any CSS or component. Hard bans:
-- No gradients of any kind (no `linear-gradient`, no `bg-gradient-to-*`)
-- No glassmorphism, backdrop-blur, or translucent frosted cards
-- No purple/violet/indigo anywhere
-- No glow effects, no coloured box-shadows
-- No emoji in the UI
-- No border-radius above `2px`
-- No shadcn default theme, no Material, no Bootstrap
+### 2.3 Quantum is present, wired, and not the headline
 
-Colour carries **severity meaning only**. If a colour is not encoding data, it is greyscale.
+The `qubo-dispatch` package carries over unchanged. It is wired to the response-prioritisation feature, which is bullet (f) of the problem statement.
+
+**It is mentioned once, in one place, and never leads.** SIH is judged by ministry and industry panels who asked for a landslide monitoring system, not a quantum demo. The headline is InSAR deformation monitoring.
+
+Framing, verbatim, wherever it appears:
+> "Response prioritisation is formulated as a QUBO and runs on classical solvers today. The formulation is hardware-ready for quantum backends. It is not in the critical path."
+
+Never claim quantum advantage. Never put "quantum" in a heading, a nav item, or a slide title.
 
 ---
 
-## 3. Stack — pinned
+## 3. Non-negotiable rules
 
-**Frontend**
-- Vite + React 18 + TypeScript
-- Tailwind CSS (config locked to the tokens in `docs/DESIGN.md` — no arbitrary values)
-- MapLibre GL JS (not Leaflet, not Mapbox GL — licensing)
-- `idb` for IndexedDB
-- Workbox for the service worker
-- TanStack Query for server state
-
-**Backend**
-- FastAPI + Uvicorn, Python 3.11
-- Pydantic v2 for all request/response models
-- `supabase-py` for DB access
-
-**Data**
-- Supabase (Postgres 15 + PostGIS + Realtime + Auth)
-
-**Risk model**
-- LightGBM, scikit-learn
-- `rasterio`, `pysheds` (HAND computation), `osmnx`, `networkx`
-
-**Optimization**
-- `qiskit==1.2.4`, `qiskit-aer==0.15.1`, `qiskit-optimization==0.6.1` — **pin exactly, commit the lockfile in hour 1**
-- `ortools` for the classical baseline
-- Pure-Python simulated annealing (no extra dependency)
-
-**Do not add libraries not listed here without a stated reason.**
+- **No gradients, glassmorphism, purple, glow, or border-radius above 2px.** `docs/DESIGN.md` carries over from the previous build unchanged. Read it before writing CSS.
+- **No fabricated sensor data.** We have no in-situ hardware. Satellite soil moisture only, plus a documented sensor ingest contract. Do not simulate a sensor feed.
+- **The system works offline.** Not as a feature flag — as the default assumption. NER connectivity is poor and the problem statement names this explicitly.
+- **Every risk score is labelled by provenance.** Learned model or physical index, shown per cell. Never blur the distinction.
+- **Two clients, one backend.** Shared auth, shared API, shared component library. Do not build two systems.
+- **Languages: English, Hindi, Assamese only.** The i18n structure supports more, but no other language — Mizo included — is ever generated. There is no native speaker on the team to verify emergency instructions, and unverified translations of emergency messaging do not ship.
 
 ---
 
 ## 4. Repository layout
 
 ```
-prahari/
+qresq-ner/
 ├── CLAUDE.md
 ├── README.md
 ├── docs/
+│   ├── MIGRATION.md        # READ FIRST — what carries, dies, is new
 │   ├── PRD.md
 │   ├── TRD.md
-│   ├── WORKFLOW.md
-│   └── DESIGN.md
+│   ├── WORKFLOW.md         # 6-day build plan
+│   ├── DATA.md             # NER datasets + ingest prompt
+│   ├── TRAINING.md         # model training spec + prompt
+│   └── DESIGN.md           # carried over unchanged
 ├── packages/
-│   └── qubo-dispatch/          # standalone, open-source, MIT
-│       ├── README.md
-│       ├── BUILD_SPEC.md       # file-by-file implementation contract
-│       ├── pyproject.toml
-│       ├── src/qubo_dispatch/
-│       │   ├── formulation.py  # build QUBO from a DispatchProblem
-│       │   ├── penalties.py    # auto-tune lambda from objective bound
-│       │   ├── partition.py    # constrained k-means zoning
-│       │   ├── solvers/
-│       │   │   ├── base.py     # Solver protocol
-│       │   │   ├── qaoa.py
-│       │   │   ├── annealing.py
-│       │   │   ├── ortools_solver.py
-│       │   │   └── greedy.py
-│       │   └── router.py       # solve(problem, backend=...) + fallback chain
-│       └── tests/
-│           ├── test_constraints.py   # MUST pass: no double-assignment
-│           └── test_fallback.py
+│   ├── qubo-dispatch/      # CARRIES UNCHANGED — do not modify
+│   └── ui/                 # NEW — shared components for both clients
 ├── services/
 │   └── api/
 │       ├── schema.sql          # runnable — source of truth for the DB
-│       ├── BUILD_SPEC.md       # file-by-file implementation contract
-│       ├── main.py
-│       ├── routers/            # risk, requests, dispatch, units, benchmark
-│       ├── risk/                # feature engineering, LightGBM, HAND
-│       ├── roads/               # OSM graph, flood-aware edge weights
-│       └── seed/                # Titli scenario generator
+│       ├── BUILD_SPEC.md       # implementation contract
+│       ├── terrain/        # carries, extended
+│       ├── insar/          # NEW
+│       ├── risk/           # retrained
+│       ├── roads/          # NEW — not carried, see docs/MIGRATION.md §2
+│       ├── reports/        # NEW — citizen submissions
+│       ├── alerts/         # NEW — CAP generation
+│       └── dispatch/       # carries
 └── apps/
-    └── web/
-        ├── src/
-        │   ├── components/
-        │   ├── routes/          # /map  /dispatch  /requests  /benchmark
-        │   ├── lib/             # offline queue, sync, api client
-        │   └── styles/tokens.css
-        └── public/tiles/         # PMTiles for Srikakulam, z10–14
+    ├── BUILD_SPEC.md       # implementation contract for both clients
+    ├── admin/              # evolved from previous web client
+    └── citizen/            # NEW — PWA + Capacitor
 ```
-
-`packages/qubo-dispatch` must have **zero imports** from `services/` or `apps/`. It is publishable on its own.
 
 ---
 
-## 5. The QUBO — implement exactly this
+## 5. Stack
 
-Variable: `x[i][j] = 1` if unit *i* is dispatched to request *j*.
+Everything below is either carried over or a deliberate addition. Do not add libraries not listed without stating why.
 
-**Objective**
-```
-H_cost = -Σ_ij (severity_j · urgency_j · people_j) · x_ij
-         +Σ_ij (α · travel_time_ij) · x_ij
-```
-Normalise both terms to [0,1] before combining. `α` default 0.3.
+**Carried unchanged:** Vite · React · TypeScript · Tailwind · MapLibre GL · PMTiles · Workbox · idb · FastAPI · Pydantic v2 · Supabase (Postgres + PostGIS + Realtime) · LightGBM · rasterio · osmnx · networkx · Qiskit + Aer · OR-Tools
 
-**Constraint 1 — each request served at most once**
-
-Do **not** use the textbook `(Σ_i x_ij − 1)²` penalty. In a real disaster there are more requests than units, so "exactly one" is infeasible and the solver returns garbage. Use at-most-one:
-
-```
-H_request = λ₁ · Σ_j Σ_{i<i'} 2 · x_ij · x_i'j
-```
-
-Pairwise conflict terms only. No slack variables, no extra qubits.
-
-**Constraint 2 — each unit dispatched at most once**
-```
-H_unit = λ₂ · Σ_i Σ_{j<j'} 2 · x_ij · x_ij'
-```
-
-**Penalty tuning** (`penalties.py`, compute at runtime, never hardcode):
-```
-bound = max_ij |severity_j · urgency_j · people_j| + α · max(travel_time)
-λ = 1.2 · bound
-```
-Comment in the code why 1.2 and not 10: oversized penalties flatten the energy landscape and stall the QAOA optimizer.
-
-**QAOA config**
-- Zone cap: ≤ 24 binary variables (Aer statevector: 24 qubits ≈ 268 MB; 30 qubits ≈ 17 GB and dies)
-- Target zone size: 4 units × 5 requests = 20 qubits
-- Depth `p = 3`
-- Optimizer: COBYLA
-- Shots: 1024, take the **best measured bitstring**, not the mean
-- **Warm start**: initialise parameters from the greedy solution, not random
-
-**Scaling is horizontal.** Never grow the QUBO. Partition geographically into zones of ≤ 5 requests, solve in parallel, merge. Qubit count per solve stays constant whether there are 40 requests or 4,000.
+**New:**
+- `@capacitor/core`, `@capacitor/android`, `@capacitor/geolocation`, `@capacitor/camera` — Android wrap
+- `react-i18next` — multilingual (English, Hindi, Assamese)
+- `MintPy` / `ISCE2` — InSAR processing (offline only, not in the API path)
+- `onnxruntime-web` — on-device photo classification in the citizen app
+- `python-multipart`, `Pillow` — media upload handling
 
 ---
 
-## 6. Testing floor
+## 5b. Where the implementation contracts live
 
-Two tests must pass before anything is demoed:
+Read the relevant spec before writing code in that area:
 
-- `test_constraints.py` — across 500 random problem instances, no returned assignment ever double-books a unit or a request. Any solver, any backend.
-- `test_fallback.py` — with Qiskit monkeypatched to raise on import, `solve()` still returns a valid assignment.
+- `docs/MIGRATION.md` — what carries, what is retrained, what is new. **First.**
+- `services/api/BUILD_SPEC.md` — backend, file by file, with the traps.
+- `services/api/schema.sql` — runnable. Apply with psql; never retype DDL.
+- `apps/BUILD_SPEC.md` — both clients, shared UI package, Capacitor.
+- `docs/TRAINING.md` — data → features → models → export. **Its §0 lists three
+  failure modes that produce models which look excellent and are worthless.
+  Read it before writing any training code.**
 
----
+## 6. When you are unsure
 
-## 7. Copy rules
-
-- Sentence case everywhere. Not Title Case.
-- Active voice. A button that says "Dispatch" produces a log line that says "Dispatched."
-- Name things as an emergency officer would: "rescue units", "requests", "zones" — never "entities", "objects", "records".
-- Errors state what happened and what to do. No apologies.
-- Empty states are instructions, not decoration.
-- Never write "leverage", "seamless", "powerful", "revolutionize", "cutting-edge", "harness".
-
----
-
-## 7b. Where the implementation contracts live
-
-Before writing code in either package, read its build spec:
-
-- `packages/qubo-dispatch/BUILD_SPEC.md` — every file, its exact
-  responsibility, the build order, and the traps. Includes the three
-  ways the QUBO expansion is commonly got wrong.
-- `services/api/BUILD_SPEC.md` — same, for the FastAPI service.
-- `services/api/schema.sql` — runnable. Apply it with psql; never
-  retype the DDL from `docs/TRD.md`.
-
-## 8. When you are unsure
-
-Ask rather than assume. If a spec in `docs/` conflicts with this file, this file wins. If you are about to add a dependency, invent a colour, add a feature, or claim a performance result — stop and ask first.
+Ask rather than assume. If a spec in `docs/` conflicts with this file, this file wins. Stop and ask before adding a dependency, inventing a colour, adding a feature, claiming a performance result, or building anything that contradicts §2. If a data source is unreachable, say so — never substitute a different source, region, or date range without saying so first.
