@@ -7,8 +7,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import requests as requests_router
-from routers import benchmark, dispatch, log, risk, units
+from routers import alerts, benchmark, dispatch, insar, log, reports, requests as requests_router, resources, risk, roads, units
 
 app = FastAPI(title="Q-resQ API")
 
@@ -31,6 +30,11 @@ app.include_router(units.router, prefix="/units", tags=["units"])
 app.include_router(dispatch.router, prefix="/dispatch", tags=["dispatch"])
 app.include_router(benchmark.router, prefix="/benchmark", tags=["benchmark"])
 app.include_router(log.router, prefix="/log", tags=["log"])
+app.include_router(roads.router, prefix="/roads", tags=["roads"])
+app.include_router(insar.router, prefix="/insar", tags=["insar"])
+app.include_router(reports.router, prefix="/reports", tags=["reports"])
+app.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+app.include_router(resources.router, tags=["resources"])
 
 
 @app.get("/health")

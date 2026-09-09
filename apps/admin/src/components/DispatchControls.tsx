@@ -1,8 +1,33 @@
 import { useState } from "react"
 import type { Backend, BenchmarkRow } from "../lib/api"
-import { useRunBenchmark, useSolveDispatch } from "../lib/hooks"
+import { useCreateRequest, useRunBenchmark, useSolveDispatch } from "../lib/hooks"
 
 const BACKENDS: Backend[] = ["greedy", "annealing", "ortools", "qaoa"]
+
+// Aizawl district bbox - see services/api/config.py:REGION["bbox"]
+const DEMO_BBOX = { west: 92.55, south: 23.55, east: 93.05, north: 24.05 }
+const DEMO_CATEGORIES = ["medical", "stranded", "evacuation"] as const
+const DEMO_NOTES = [
+  "Family trapped, water rising near the house",
+  "Elderly resident unable to evacuate alone",
+  "Road cracked, slope moving above the settlement",
+  "Group stranded after the ridge road closed",
+  "Child injured, needs medical attention",
+  "Household cut off, no vehicle access",
+]
+
+function randomDemoRequest() {
+  const lon = DEMO_BBOX.west + Math.random() * (DEMO_BBOX.east - DEMO_BBOX.west)
+  const lat = DEMO_BBOX.south + Math.random() * (DEMO_BBOX.north - DEMO_BBOX.south)
+  return {
+    id: crypto.randomUUID(),
+    location: [lat, lon] as [number, number],
+    people_count: 1 + Math.floor(Math.random() * 8),
+    category: DEMO_CATEGORIES[Math.floor(Math.random() * DEMO_CATEGORIES.length)],
+    note: DEMO_NOTES[Math.floor(Math.random() * DEMO_NOTES.length)],
+    created_at: new Date().toISOString(),
+  }
+}
 
 interface Props {
   showRoutes: boolean
@@ -21,9 +46,20 @@ export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
   const [backend, setBackend] = useState<Backend>("greedy")
   const solve = useSolveDispatch()
   const benchmark = useRunBenchmark()
+  const createRequest = useCreateRequest()
+  const [seeding, setSeeding] = useState(false)
   const [rows, setRows] = useState<BenchmarkRow[] | null>(null)
   const [resultsOpen, setResultsOpen] = useState(true)
   const hasResults = Boolean(solve.data || rows)
+
+  const handleSeedDemoData = async () => {
+    setSeeding(true)
+    const count = 8
+    for (let i = 0; i < count; i++) {
+      await createRequest.mutateAsync(randomDemoRequest())
+    }
+    setSeeding(false)
+  }
 
   return (
     <div className="border-t border-ground-300 bg-ground-100">
@@ -46,6 +82,19 @@ export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
             }`}
           >
             {showRoutes ? "Hide routes" : "Show routes"}
+          </button>
+        </div>
+
+        <span className="w-px h-5 bg-ground-300" />
+
+        <div className="flex items-center">
+          <GroupLabel>Demo</GroupLabel>
+          <button
+            onClick={handleSeedDemoData}
+            disabled={seeding}
+            className="h-6 px-2 text-[11px] font-display uppercase tracking-wide border bg-transparent border-ground-300 text-ink-200 hover:bg-ground-200 disabled:opacity-50"
+          >
+            {seeding ? "Seeding..." : "Seed demo data"}
           </button>
         </div>
 

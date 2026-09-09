@@ -56,7 +56,7 @@ And when a slope does fail, a second problem begins: roads are blocked, settleme
 | GIS mapping | MapLibre; vulnerable roads, settlements, infrastructure |
 | Citizen geo-tagged uploads | Citizen PWA with on-device pre-classification |
 | Risk severity dashboard | Admin console, IMD warning ladder |
-| Road connectivity status | Flood/block-aware road graph, live component analysis |
+| Road connectivity status | Blockage-aware road graph, live component analysis |
 | Weather-linked forecasts | Forecast rainfall → forward risk projection |
 | Response prioritisation | QUBO dispatch engine (carried over) |
 | Multilingual | Hindi, Assamese, English at demo scope |

@@ -19,11 +19,21 @@ from __future__ import annotations
 import math
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from qubo_dispatch import DispatchProblem, Request as QDRequest, Unit as QDUnit, solve_partitioned
 
+from dispatch.allocation import (
+    EmergencyRequest,
+    AvailableResource,
+    ResourceAssignment,
+    compute_request_severity,
+    match_resources_to_requests,
+    approve_resource_allocation,
+)
 from models import AssignmentOut, DispatchRoundOut, DispatchSolveRequest, ManualAssignRequest, UnitOut, RequestOut
 from roads.routing import ROAD_KINDS, fetch_road_route
 from routers import log as log_router
@@ -247,3 +257,122 @@ def get_assignments() -> list[AssignmentOut]:
     for round_out in _rounds.values():
         all_assignments.extend(round_out.assignments)
     return all_assignments
+
+
+# ===============================================================
+# RESOURCE ALLOCATION FROM CITIZEN EMERGENCY REQUESTS
+# ===============================================================
+
+class AllocationRequest(BaseModel):
+    request_id: str
+    location: tuple[float, float]
+    people_count: int
+    category: Literal["medical", "stranded", "evacuation"]
+    backend: Literal["greedy", "qaoa", "annealing", "ortools"] = "greedy"
+
+
+class AllocationResponse(BaseModel):
+    request_id: str
+    allocations: list[dict]
+    total_estimated_arrival_min: int
+    backend: str
+
+
+@router.post("/allocate", response_model=AllocationResponse)
+def allocate_resources(payload: AllocationRequest) -> AllocationResponse:
+    """Compute optimal resource allocation for a citizen emergency request.
+
+    This endpoint takes a citizen emergency request and returns the
+    optimal resource allocation based on available resources in the pool.
+    The admin can then approve this allocation.
+
+    Uses the QUBO dispatch package for optimization. The formulation is
+    hardware-ready for quantum backends but runs on classical solvers today.
+    """
+    # Convert to internal format
+    emergency_request = EmergencyRequest(
+        id=payload.request_id,
+        location=payload.location,
+        people_count=payload.people_count,
+        category=payload.category,
+        severity=compute_request_severity(
+            EmergencyRequest(
+                id=payload.request_id,
+                location=payload.location,
+                people_count=payload.people_count,
+                category=payload.category,
+                severity=0.0,
+                created_at=datetime.now().isoformat()
+            )
+        ),
+        created_at=datetime.now().isoformat()
+    )
+
+    # Get available resources (simplified - would query DB)
+    available_resources = [
+        AvailableResource(id=1, kind="ambulance", available=5, location=(23.7271, 92.7176)),
+        AvailableResource(id=2, kind="rescue_team", available=12, location=(23.7271, 92.7176)),
+        AvailableResource(id=3, kind="truck", available=3, location=(23.7271, 92.7176)),
+        AvailableResource(id=4, kind="excavator", available=2, location=(23.7271, 92.7176)),
+        AvailableResource(id=5, kind="helicopter", available=1, location=(23.7271, 92.7176)),
+        AvailableResource(id=6, kind="boat", available=4, location=(23.7271, 92.7176)),
+    ]
+
+    # Compute allocation using QUBO dispatch (formulated for quantum, runs on classical)
+    assignments = match_resources_to_requests(
+        [emergency_request],
+        available_resources,
+        backend=payload.backend
+    )
+
+    # Compute total estimated arrival
+    total_arrival = max([a.estimated_arrival_min for a in assignments]) if assignments else 0
+
+    return AllocationResponse(
+        request_id=payload.request_id,
+        allocations=[
+            {
+                "resource_kind": a.resource_kind,
+                "resource_count": a.resource_count,
+                "estimated_arrival_min": a.estimated_arrival_min,
+                "confidence": a.confidence,
+            }
+            for a in assignments
+        ],
+        total_estimated_arrival_min=total_arrival,
+        backend=payload.backend,
+    )
+
+
+class ApproveAllocationRequest(BaseModel):
+    request_id: str
+    allocations: list[dict]
+
+
+@router.post("/approve")
+def approve_allocation(payload: ApproveAllocationRequest) -> dict:
+    """Approve a resource allocation and create dispatch records.
+
+    This creates actual assignments and updates resource availability.
+    """
+    # Convert to internal format
+    assignments = [
+        ResourceAssignment(
+            request_id=payload.request_id,
+            resource_kind=a["resource_kind"],
+            resource_count=a["resource_count"],
+            estimated_arrival_min=a["estimated_arrival_min"],
+            confidence=a.get("confidence", 0.8),
+        )
+        for a in payload.allocations
+    ]
+
+    # Approve and create dispatch records
+    result = approve_resource_allocation(payload.request_id, assignments)
+
+    log_router.append(
+        "dispatch",
+        f"Resource allocation approved for request {payload.request_id[:8]}",
+    )
+
+    return result

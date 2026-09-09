@@ -1,182 +1,191 @@
-"""Assemble real risk cells: terrain features from the real Aizawl
-DEM + real rainfall + the heuristic formula. Disk-cached, since
-HAND/TWI/stream-distance each take ~80s on the full DEM.
+"""Assemble real risk cells: terrain features sampled from the
+pre-computed Aizawl-district rasters (ingest/terrain.py, ingest/road_cut.py,
+ingest/landcover.py) plus risk/heuristic.py's landslide susceptibility
+formula (docs/TRAINING.md #6). Disk-cached, since the district-wide grid
+is ~284k cells.
 
-No LightGBM model or landslide labels yet (risk/model.py, risk/labels.py
-not built for this pivot) - this is the heuristic path, labelled as
-such downstream. No soil drainage data source in hand either -
-drainage_penalty defaults to a neutral 0.5, disclosed here rather than
-faked as real.
+Every cell is provenance-labelled "index" (see CLAUDE.md #3) - there is
+no trained model behind this yet (risk/model.py, ml/sampling.py: 69
+landslide positives is below the threshold to train something that
+survives spatial cross-validation).
+
+No soil drainage or lithology data source in hand - lithology_weight is
+passed as None (risk/heuristic.py renormalises around it, disclosed in
+its own log line rather than faked as real). hand_m/twi/dist_stream_m
+are sampled and returned for display only, per docs/TRD.md: HAND still
+matters for the flash-flood secondary hazard, but is not part of the
+landslide susceptibility formula.
+
+This module previously recomputed HAND/slope/TWI at runtime from a
+cropped DEM via pysheds, plus a rain_72h reading from a rainfall NetCDF
+that never shipped for Aizawl (RF25_RAINFALL_NC_PATH pointed at a file
+that does not exist in this repo) - that path could not run on a cache
+miss. Rainfall enters risk separately, as ml/trigger.py's trigger index
+(docs/TRAINING.md #5), not here; this module no longer touches rainfall
+at all.
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import numpy as np
 import rasterio
 
 from config import REGION
+from ml.trigger import compute_trigger, composite_risk
 from risk.heuristic import band, compute_heuristic_risk
-from risk.rainfall import load_rainfall_dataset, rain_window
-from risk.terrain import build_grid, compute_hand, compute_slope, compute_stream_distance, compute_twi
+from risk.terrain import build_grid
 
 _API_DIR = Path(__file__).resolve().parents[1]
-FULL_DEM_PATH = str(_API_DIR / "data" / "raw" / "dem_aizawl.tif")
-DEM_PATH = str(_API_DIR / "data" / "raw" / "dem_aizawl_demo_crop.tif")
-# Only touched on a cache miss (see build_risk_cells) - the deployed
-# backend ships the precomputed .npy caches and never hits this path.
-# RAINFALL_NC_PATH is an env var, not a hardcoded machine-specific path,
-# so a cache-miss fails with a clear "set this env var" error instead
-# of silently referencing a path that only exists on one developer's
-# machine.
-RAINFALL_NC_PATH = os.environ.get(
-    "RF25_RAINFALL_NC_PATH", str(_API_DIR / "data" / "raw" / "rainfall_aizawl.nc")
-)
+TERRAIN_DIR = _API_DIR / "data" / "raw" / "terrain"
+FOREST_FRAC_PATH = _API_DIR / "data" / "raw" / "forest_frac.tif"
 CACHE_DIR = _API_DIR / "data" / "raw"
 _CACHE_PATH = CACHE_DIR / "risk_cells_cache.npy"
 
-_TERRAIN_CACHE_PATH = CACHE_DIR / "risk_terrain_cache.npy"
-_TERRAIN_COLS = ["lat", "lon", "hand_m", "slope_deg", "twi", "dist_stream_m", "rain_72h_mm"]
+_RASTERS = {
+    "slope_deg": TERRAIN_DIR / "slope_deg.tif",
+    "curv_prof": TERRAIN_DIR / "curv_prof.tif",
+    "is_cut_slope": TERRAIN_DIR / "is_cut_slope.tif",
+    "ls_factor": TERRAIN_DIR / "ls_factor.tif",
+    "hand_m": TERRAIN_DIR / "hand_m.tif",
+    "twi": TERRAIN_DIR / "twi.tif",
+    "dist_stream_m": TERRAIN_DIR / "dist_stream_m.tif",
+}
+_REQUIRED_FOR_FORMULA = ["slope_deg", "curv_prof", "is_cut_slope", "ls_factor"]
 
-# Aizawl district bbox, from the single shared region config - the
-# full-district DEM works for HAND/TWI (computed once over the whole
-# raster), but the grid itself is kept small so sampling + the map
-# stay fast. See services/api/config.py.
 _bbox = REGION["bbox"]
-DEMO_BBOX = (_bbox["west"], _bbox["south"], _bbox["east"], _bbox["north"])
+REGION_BBOX = (_bbox["west"], _bbox["south"], _bbox["east"], _bbox["north"])
 GRID_CELL_M = float(REGION["grid_m"])
 
-# No NER-specific rainfall event/antecedent-window logic exists yet -
-# that is a later sub-project (docs/DATA.md, docs/TRAINING.md #5).
-# This placeholder keeps the module importable; build_risk_cells()
-# will fail clearly against RAINFALL_NC_PATH until a real Aizawl
-# rainfall dataset replaces it. Never treated as a real value.
-_PLACEHOLDER_EVENT_DATE = "2024-01-01"
 
-
-def _nearest_pixel_values(raster: np.ndarray, transform, lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
+def _nearest_pixel_values(raster_path: Path, lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
+    with rasterio.open(raster_path) as src:
+        raster = src.read(1).astype(float)
+        transform = src.transform
     rows, cols = rasterio.transform.rowcol(transform, lons, lats)
     rows = np.clip(np.asarray(rows), 0, raster.shape[0] - 1)
     cols = np.clip(np.asarray(cols), 0, raster.shape[1] - 1)
     return raster[rows, cols]
 
 
-def _fill_nan(values: np.ndarray, worst_case: float) -> np.ndarray:
-    if np.isnan(values).all():
-        return np.full_like(values, worst_case)
-    fallback = np.nanmax(values) if np.isfinite(np.nanmax(values)) else worst_case
-    return np.nan_to_num(values, nan=fallback)
-
-
-def _ensure_cropped_dem() -> None:
-    """Crop the full-district DEM to the demo bbox once. The demo area
-    is ~5% of the district, and this machine has ~7.7GB RAM total -
-    running HAND/TWI/stream-distance on the full 3960x2880 raster
-    three times in one process reliably OOMs; on the small crop it's
-    fast and cheap.
-    """
-    if Path(DEM_PATH).exists():
-        return
-    print(f"[features] cropping the full DEM to the demo bbox {DEMO_BBOX}")
-    west, south, east, north = DEMO_BBOX
-    with rasterio.open(FULL_DEM_PATH) as src:
-        window = rasterio.windows.from_bounds(west, south, east, north, src.transform)
-        data = src.read(1, window=window)
-        transform = src.window_transform(window)
-        profile = src.profile.copy()
-    profile.update(height=data.shape[0], width=data.shape[1], transform=transform)
-    with rasterio.open(DEM_PATH, "w", **profile) as dst:
-        dst.write(data, 1)
-    print(f"[features] cropped DEM: {data.shape}")
-
-
 def _compute_terrain_grid() -> dict[str, np.ndarray]:
-    """The expensive part: real HAND/slope/TWI/stream-distance from the
-    DEM, plus real rainfall, sampled onto the grid. Computed at most
-    once and disk-cached.
-    """
-    _ensure_cropped_dem()
+    missing = [name for name, path in _RASTERS.items() if name in _REQUIRED_FOR_FORMULA and not path.exists()]
+    if missing:
+        raise FileNotFoundError(
+            f"missing terrain rasters {missing} in {TERRAIN_DIR} - run ingest/terrain.py "
+            f"and ingest/road_cut.py first"
+        )
 
-    print("[features] computing terrain features from the cropped demo-area DEM")
-    hand = compute_hand(DEM_PATH)
-    slope = compute_slope(DEM_PATH)
-    twi = compute_twi(DEM_PATH)
-    stream_dist = compute_stream_distance(DEM_PATH)
-
-    with rasterio.open(DEM_PATH) as src:
-        transform = src.transform
-
-    print(f"[features] building the {int(GRID_CELL_M)}m grid over the demo area")
-    grid = build_grid(DEMO_BBOX, cell_m=GRID_CELL_M)
+    print(f"[features] building the {int(GRID_CELL_M)}m grid over {REGION['name']}")
+    grid = build_grid(REGION_BBOX, cell_m=GRID_CELL_M)
     lats = grid["centroid"].y.to_numpy()
     lons = grid["centroid"].x.to_numpy()
+    print(f"[features] {len(lats)} grid cells")
 
-    hand_vals = _fill_nan(_nearest_pixel_values(hand, transform, lats, lons), worst_case=0.0)
-    slope_vals = _fill_nan(_nearest_pixel_values(slope, transform, lats, lons), worst_case=0.0)
-    twi_vals = _nearest_pixel_values(twi, transform, lats, lons)
-    stream_vals = _fill_nan(_nearest_pixel_values(stream_dist, transform, lats, lons), worst_case=2000.0)
+    data: dict[str, np.ndarray] = {"lat": lats, "lon": lons}
+    for name, path in _RASTERS.items():
+        if path.exists():
+            data[name] = _nearest_pixel_values(path, lats, lons)
+        else:
+            print(f"[features] {path} not found - {name} column will be null, not fabricated")
+            data[name] = np.full(len(lats), np.nan)
 
-    print("[features] loading rainfall")
-    rain_ds = load_rainfall_dataset(RAINFALL_NC_PATH)
-    rain_vals = np.array([
-        rain_window(rain_ds, lat, lon, _PLACEHOLDER_EVENT_DATE, days=3) for lat, lon in zip(lats, lons)
-    ])
+    if FOREST_FRAC_PATH.exists():
+        data["forest_frac"] = _nearest_pixel_values(FOREST_FRAC_PATH, lats, lons)
+    else:
+        print(f"[features] {FOREST_FRAC_PATH} not found - forest_frac column will be null, not fabricated")
+        data["forest_frac"] = np.full(len(lats), np.nan)
 
-    return {
-        "lat": lats, "lon": lons, "hand_m": hand_vals, "slope_deg": slope_vals,
-        "twi": twi_vals, "dist_stream_m": stream_vals, "rain_72h_mm": rain_vals,
-    }
+    # Rainfall and soil moisture for the trigger index. ingest/rainfall_aizawl.py
+    # is disclosed-synthetic (monsoon-pattern random values, no real ERA5/SMAP
+    # API wired up yet - see that module's docstring) - not fabricated as real
+    # here, just sampled the same way the rest of this pipeline treats missing
+    # sources. Vectorised: a per-cell Python loop here previously reopened /
+    # re-queried the NetCDF file 284k times and took 10+ minutes.
+    print("[features] sampling rainfall/soil-moisture rasters (synthetic - see ingest/rainfall_aizawl.py)")
+    from ingest.rainfall_aizawl import get_rainfall_grid, get_soil_moisture_grid
 
+    rain = get_rainfall_grid(lats, lons, days_back=15)
+    data["rain_15d"] = rain["rain_15d"]
+    data["rain_3d"] = rain["rain_3d"]
+    data["rain_intensity_max"] = rain["rain_intensity_max"]
+    data["soil_moisture"] = get_soil_moisture_grid(lats, lons)
 
-def _terrain_grid_from_existing_cache() -> dict[str, np.ndarray] | None:
-    """If a cells cache already exists from a prior run, its terrain
-    columns are the exact same real values _compute_terrain_grid would
-    produce - reuse them instead of re-running HAND, which takes 80s+.
-    """
-    if not _CACHE_PATH.exists():
-        return None
-    cells = list(np.load(_CACHE_PATH, allow_pickle=True))
-    if not cells:
-        return None
-    return {col: np.array([c[col] for c in cells], dtype=float) for col in _TERRAIN_COLS}
+    # curv_prof is genuinely undefined (not missing) on perfectly flat
+    # cells - risk/terrain.py's curvature() reports NaN there rather
+    # than a fabricated 0. A NaN input would otherwise propagate through
+    # the whole risk_score sum for that cell (see the histogram check
+    # this replaced - 46 cells came back NaN). A flat cell already
+    # carries slope_deg=0, so it scores near-zero on that term
+    # regardless; fill curv_prof with the district's own median
+    # (real data, not an invented constant) so the row still sums.
+    n_flat = int(np.isnan(data["curv_prof"]).sum())
+    if n_flat:
+        median_curv = float(np.nanmedian(data["curv_prof"]))
+        print(f"[features] {n_flat} cells are perfectly flat (curv_prof undefined) - "
+              f"filled with the district median profile curvature ({median_curv:.4f})")
+        data["curv_prof"] = np.where(np.isnan(data["curv_prof"]), median_curv, data["curv_prof"])
+
+    return data
 
 
 def _get_terrain_grid(force: bool = False) -> dict[str, np.ndarray]:
-    if _TERRAIN_CACHE_PATH.exists() and not force:
-        return dict(np.load(_TERRAIN_CACHE_PATH, allow_pickle=True).item())
+    return _compute_terrain_grid()
 
-    grid = None if force else _terrain_grid_from_existing_cache()
-    if grid is None:
-        grid = _compute_terrain_grid()
 
-    np.save(_TERRAIN_CACHE_PATH, grid, allow_pickle=True)
-    return grid
+def _print_score_histogram(risk_score: np.ndarray) -> None:
+    edges = np.linspace(0.0, 1.0, 11)
+    counts, _ = np.histogram(risk_score, bins=edges)
+    total = len(risk_score)
+    n_nan = int(np.isnan(risk_score).sum())
+    print(f"[features] risk_score distribution across {total} cells "
+          f"(mean={np.nanmean(risk_score):.3f} std={np.nanstd(risk_score):.3f}"
+          f"{f', {n_nan} NaN - see above' if n_nan else ''}):")
+    for lo, hi, count in zip(edges[:-1], edges[1:], counts):
+        bar = "#" * int(50 * count / max(total, 1))
+        print(f"  [{lo:.1f}, {hi:.1f}) {count:7d} {bar}")
 
 
 def build_risk_cells(force: bool = False) -> list[dict]:
-    """Single-hazard (landslide) risk cells over the Aizawl grid.
+    """Single-hazard (landslide) risk cells over the Aizawl district grid.
 
-    Uses risk/heuristic.py's default weights until the NER
-    susceptibility + trigger model (docs/TRAINING.md) replaces this
-    function's formula entirely - this is the placeholder heuristic
-    path, not the retrained model.
+    Every cell's risk_score comes from risk/heuristic.py's physical
+    index (docs/TRAINING.md #6) - provenance is "index" for all of them
+    until a trained model exists.
+
+    The trigger index (rainfall + soil moisture) is computed via
+    ml/trigger.py and combined as: risk = susceptibility * trigger.
+    Both components are exposed separately.
     """
     if _CACHE_PATH.exists() and not force:
         return list(np.load(_CACHE_PATH, allow_pickle=True))
 
     terrain = _get_terrain_grid(force=force)
     lats, lons = terrain["lat"], terrain["lon"]
-    hand_vals, slope_vals = terrain["hand_m"], terrain["slope_deg"]
-    twi_vals, stream_vals = terrain["twi"], terrain["dist_stream_m"]
-    rain_vals = terrain["rain_72h_mm"]
 
-    drainage_vals = np.full(len(lats), 0.5)  # no soil drainage source yet - neutral default
-
-    risk_score, contributions = compute_heuristic_risk(
-        hand_vals, rain_vals, slope_vals, stream_vals, drainage_vals,
+    # Compute susceptibility (physical index)
+    susceptibility, sus_contributions = compute_heuristic_risk(
+        slope_deg=terrain["slope_deg"],
+        curv_prof=terrain["curv_prof"],
+        is_cut_slope=terrain["is_cut_slope"],
+        forest_frac=terrain["forest_frac"],
+        ls_factor=terrain["ls_factor"],
+        lithology_weight=None,  # not available yet - needs the GSI export
     )
+
+    # Compute trigger index (rainfall + soil moisture)
+    trigger_score, trigger_contributions = compute_trigger(
+        rain_15d=terrain["rain_15d"],
+        rain_3d=terrain["rain_3d"],
+        rain_intensity_max=terrain["rain_intensity_max"],
+        soil_moisture=terrain["soil_moisture"],
+    )
+
+    # Composite risk = susceptibility * trigger
+    risk_score = composite_risk(susceptibility, trigger_score)
+
+    _print_score_histogram(risk_score)
 
     cells = []
     for i in range(len(lats)):
@@ -184,14 +193,21 @@ def build_risk_cells(force: bool = False) -> list[dict]:
             "id": i,
             "lat": float(lats[i]),
             "lon": float(lons[i]),
-            "hand_m": float(hand_vals[i]),
-            "slope_deg": float(slope_vals[i]),
-            "twi": float(twi_vals[i]) if np.isfinite(twi_vals[i]) else None,
-            "dist_stream_m": float(stream_vals[i]),
-            "rain_72h_mm": float(rain_vals[i]),
+            "slope_deg": float(terrain["slope_deg"][i]),
+            "curv_prof": float(terrain["curv_prof"][i]) if np.isfinite(terrain["curv_prof"][i]) else None,
+            "is_cut_slope": bool(terrain["is_cut_slope"][i]),
+            "forest_frac": float(terrain["forest_frac"][i]) if np.isfinite(terrain["forest_frac"][i]) else None,
+            "ls_factor": float(terrain["ls_factor"][i]),
+            "hand_m": float(terrain["hand_m"][i]) if np.isfinite(terrain["hand_m"][i]) else None,
+            "twi": float(terrain["twi"][i]) if np.isfinite(terrain["twi"][i]) else None,
+            "dist_stream_m": float(terrain["dist_stream_m"][i]) if np.isfinite(terrain["dist_stream_m"][i]) else None,
+            "susceptibility": float(susceptibility[i]),
+            "trigger_score": float(trigger_score[i]),
             "risk_score": float(risk_score[i]),
             "risk_band": band(float(risk_score[i])),
-            "contributions": {k: float(v[i]) for k, v in contributions.items()},
+            "provenance": "index",
+            "sus_contributions": {k: float(v[i]) for k, v in sus_contributions.items()},
+            "trigger_contributions": {k: float(v[i]) for k, v in trigger_contributions.items()},
         })
 
     np.save(_CACHE_PATH, np.array(cells, dtype=object), allow_pickle=True)
@@ -209,3 +225,14 @@ def nearest_risk_score(lat: float, lon: float) -> float:
         return 0.5
     best = min(cells, key=lambda c: (c["lat"] - lat) ** 2 + (c["lon"] - lon) ** 2)
     return best["risk_score"]
+
+
+def nearest_risk_cell(lat: float, lon: float) -> dict | None:
+    """The full nearest cell for a point - used by the citizen app to
+    show real risk for wherever the reporter actually is, instead of a
+    hardcoded band.
+    """
+    cells = build_risk_cells()
+    if not cells:
+        return None
+    return min(cells, key=lambda c: (c["lat"] - lat) ** 2 + (c["lon"] - lon) ** 2)

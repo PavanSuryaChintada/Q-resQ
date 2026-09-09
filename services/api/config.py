@@ -24,3 +24,18 @@ INSAR_CORRIDOR = {
     "id": "aizawl-ridge-01",
     "description": "Set to the corridor actually processed. Do not guess.",
 }
+
+# Verified against the real roads.geojson graph (services/api/scripts/
+# find_isolation_edge.py) - blocking this way is the only single-edge
+# blockage in the whole graph that isolates 3 real, named settlements
+# from REGION['hq']. NH6 is the Aizawl-Silchar route and closes to
+# landslides most monsoons, so this is a recurring real event, not a
+# constructed one. roads/isolation.py (not yet built) should treat this
+# as the deterministic demo road-block trigger.
+DEMO_ROAD_BLOCK_TRIGGER = {
+    "way_id": "way/242679584",
+    "highway": "trunk",
+    "ref": "NH6",
+    "isolated_settlements": ["Lenchim", "Tawizo", "Mualpheng"],
+    "backup_way_id": "way/385151486",  # tertiary road, isolates the same 3 settlements via a different segment
+}

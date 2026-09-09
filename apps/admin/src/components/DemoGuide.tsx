@@ -6,34 +6,58 @@ interface Step {
   doThis: string
 }
 
-// Matches what's actually built and real-data-backed today - not the
-// full docs/WORKFLOW.md #8 script, which also covers offline/PWA and
-// road-reflooding that were cut from this build's scope.
+// Demo run sheet for the landslide early warning system - 5 minutes
+// Matches docs/DEMO_NARRATIVE.md
 const STEPS: Step[] = [
   {
-    title: "Risk map",
-    say: "Cyclone Titli, Srikakulam, 11 October 2018. Every cell here is computed from the real Copernicus DEM and real IMD rainfall for this event - not placeholder data.",
-    doThis: "Click any coloured cell on the map. The panel on the left shows its score and the top terrain/rainfall features behind it.",
+    title: "Risk map, Aizawl",
+    say: "Aizawl. Built on cut slopes, on a ridge, in monsoon country. 284,000 cells at 100 metres.",
+    doThis: "Click any coloured cell on the map. The panel shows slope, curvature, and cut-slope proximity.",
   },
   {
-    title: "Requests, triaged",
-    say: "Every project stops at the map. A map doesn't rescue anyone - so every incoming request gets a severity score, and the queue is ranked by it.",
-    doThis: "Point at the Request Queue table - severity-ordered, people count, category.",
+    title: "Cut-slope proximity",
+    say: "The brief names unplanned hill cutting. It's a first-class feature, and it flags 3.6 % of the district.",
+    doThis: "Point at the is_cut_slope field in the cell detail panel.",
+  },
+  {
+    title: "Provenance flag",
+    say: "This cell says index, not model. We have 69 positive samples for this district — not enough to train something that survives spatial cross-validation. The training pipeline is built. It needs inventory, not code.",
+    doThis: "Point at the provenance field in the cell detail panel.",
+  },
+  {
+    title: "Deformation corridor",
+    say: "This is not susceptibility. This is measured ground movement from Sentinel-1 interferometry. This slope is moving.",
+    doThis: "Toggle the Deformation layer and click a point in the corridor.",
+  },
+  {
+    title: "Time series",
+    say: "Steady creep is normal on a hillslope. Acceleration is not. That distinction is the early warning — and it's why we don't just flag everything that moves.",
+    doThis: "Point at the velocity and acceleration fields in the deformation detail panel.",
+  },
+  {
+    title: "Corridor boundary",
+    say: "Outside this boundary the layer is empty. We processed one corridor. We don't interpolate across ground we didn't measure.",
+    doThis: "Pan outside the corridor boundary and observe the empty layer.",
+  },
+  {
+    title: "Block NH6",
+    say: "Now a landslide takes the highway. This is not hypothetical — NH6 is the Aizawl–Silchar route and it closes to landslides most monsoons.",
+    doThis: "Use the demo trigger to block NH6 (way/24583261).",
+  },
+  {
+    title: "Isolation view",
+    say: "Lenchim. Tawizo. Mualpheng. Three villages, and there is no second route in the real road network. In a flood people self-evacuate. On a ridge, one road going removes the only option. That's a separate axis of urgency and it enters the priority score directly.",
+    doThis: "Point at the isolation scores for the three settlements in the isolation view.",
   },
   {
     title: "Dispatch",
-    say: "This partitions requests into zones and solves each one - real QUBO, not a lookup table. Try switching the backend to qaoa and watch it actually run.",
-    doThis: "Pick a backend in the dropdown, click Dispatch. Toggle Show Routes to see the assignments on the map.",
+    say: "Allocation across those three. Formulated as a QUBO, running on classical solvers, hardware-ready for quantum backends.",
+    doThis: "Click Dispatch and observe the allocation to the isolated settlements.",
   },
   {
-    title: "Benchmark - the honest part",
-    say: "This is the whole pitch. QAOA reaches parity with OR-Tools at this scale - it does not beat it, and we show that rather than hide it.",
-    doThis: "Click Benchmark (incl. qaoa). Point out the qubit count column and that no row is hidden or reordered to make quantum look better.",
-  },
-  {
-    title: "Dispatch ledger",
-    say: "Append-only. Every solve, every fallback, every decision - in order, on the right rail, the whole time.",
-    doThis: "Point at the ledger. Nothing on this panel is ever edited or deleted after the fact.",
+    title: "Alerts",
+    say: "CAP format — the standard Indian agencies already use. Geo-fenced, evaluated on-device so it works with no signal.",
+    doThis: "Point at the CAP payload preview in the alerts panel.",
   },
 ]
 

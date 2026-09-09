@@ -25,27 +25,27 @@ interface FeatureRow {
 
 const REQUIREMENTS: FeatureRow[] = [
   {
-    requirement: "Risk prediction or early-warning mechanism",
+    requirement: "Landslide susceptibility assessment",
     status: "done",
-    how: "Terrain risk (height above nearest drainage, topographic wetness index, distance to stream) computed from real Copernicus DEM data via OpenTopography, combined with real rainfall into a 5-band severity heuristic, percentile-normalised so a handful of outlier cells don't wash out the rest of the map. A LightGBM classifier is trained against real historical flood labels as a second model. The Titli replay uses real IMD RF25 rainfall for 11 Oct 2018; the \"live risk check\" panel picks up today's (or any nearby date's) real rainfall from Open-Meteo instead and re-scores the same terrain grid, so selecting today's date does produce a fresh answer.",
-    gap: "The live check applies one rainfall reading for the whole demo area rather than interpolating per cell, and only covers roughly a 90-day window around today (Open-Meteo's forecast API range) - an arbitrary date years in the past outside that window returns an honest error, not a fabricated number.",
+    how: "Physical index over slope, profile curvature, cut-slope proximity, forest cover and LS factor, computed from real Copernicus DEM terrain derivatives and OSM road network. 284,070 cells at 100 m over Aizawl district. Every cell is provenance-labelled \"index\" — the training pipeline is built but needs more landslide inventory data to train a model that survives spatial cross-validation.",
+    gap: "The index uses district-median profile curvature for perfectly flat cells (46 cells) where the derivative is genuinely undefined — disclosed in the log, not fabricated. Lithology weight is renormalised across the other five factors when GSI data is unavailable, rather than left as a depressed score.",
+  },
+  {
+    requirement: "Deformation monitoring (InSAR)",
+    status: "partial",
+    how: "Sentinel-1 SBAS interferometry pipeline built and documented. For the demo, a pre-computed deformation time series for one corridor in Aizawl is served through a live-looking API. Points are classified as stable, creeping, or accelerating based on velocity and acceleration thresholds.",
+    gap: "Deformation is pre-computed, not live. Live SBAS processing takes days of compute. The pipeline exists; live processing is a compute-scheduling problem, not an algorithmic one. Points outside the processed corridor are empty — we do not interpolate across ground we did not measure.",
+  },
+  {
+    requirement: "Road isolation analysis",
+    status: "partial",
+    how: "OSM road network graph with blockage-aware passability. When a road segment is blocked, connected components are recomputed and settlement isolation is calculated — component size, population, and whether a path to district headquarters survives.",
+    gap: "The DB-backed module with Realtime broadcast and block/clear endpoints is not built yet. Only the graph structure and the verified NH6 trigger exist.",
   },
   {
     requirement: "Interactive map showing vulnerable locations",
     status: "done",
     how: "MapLibre GL map with risk cells coloured by severity band, click-to-inspect detail panel per cell, live request and unit markers, and dispatch routes drawn between them.",
-  },
-  {
-    requirement: "Nearby shelters, hospitals, emergency services, and resources",
-    status: "planned",
-    how: "Designed to pull hospitals, clinics, fire and police stations, and shelters from OpenStreetMap via the Overpass API.",
-    gap: "Every public Overpass mirror tried (the default host plus two fallbacks) was unreachable from this build network - one returned 403 forbidden, the rest timed out. No facilities layer exists on the map.",
-  },
-  {
-    requirement: "Real-time notifications and alerts",
-    status: "partial",
-    how: "The dispatch ledger panel shows solves, fallbacks, and system events as they happen, polling every 2-4 seconds.",
-    gap: "In-app only - there is no push notification, SMS, or alert delivered to a field unit's own device.",
   },
   {
     requirement: "Dashboard for administrators / rescue teams",
@@ -55,28 +55,34 @@ const REQUIREMENTS: FeatureRow[] = [
   {
     requirement: "Prioritisation of rescue requests based on severity",
     status: "done",
-    how: "Each request's severity is computed from people count, category, area risk, and wait time. The dispatch solver optimises severity times people count against travel time under hard capacity constraints - it never double-books a unit or a request. The request queue is sorted by severity and searchable.",
+    how: "Each request's severity is computed from people count, category, area risk, wait time, and isolation. The dispatch solver optimises severity times people count against travel time under hard capacity constraints — it never double-books a unit or a request. The request queue is sorted by severity and searchable.",
   },
   {
-    requirement: "Offline / low-connectivity functionality",
+    requirement: "Citizen reporting and clustering",
     status: "planned",
-    how: "Designed around IndexedDB for local request queueing and a Workbox service worker for offline asset caching.",
-    gap: "Not implemented - cut to protect the risk model and dispatch pipeline given the build window.",
+    how: "Citizen app (PWA + Capacitor) with on-device photo classification, offline queueing, and clustering of reports by location.",
+    gap: "Not built — the citizen app directory does not exist yet.",
+  },
+  {
+    requirement: "CAP alert generation",
+    status: "planned",
+    how: "Common Alerting Protocol payloads generated and displayed, geo-fenced and evaluated on-device for offline capability.",
+    gap: "Not built — the alerts/ module does not exist yet. SMS gateway integration needs credentials and procurement.",
   },
 ]
 
 const EXTRA_ROWS: FeatureRow[] = [
   {
-    requirement: "Which vehicle can actually take a given route",
+    requirement: "Soil moisture integration",
     status: "partial",
-    how: "Every dispatch route on the map is now labelled with the assigned unit's kind and callsign (for example \"BOAT · Boat 04\"), so it's visible at a glance what's being sent where.",
-    gap: "This is a label, not a hard constraint - the solver does not yet know which request locations are boat-only versus road-accessible; it optimises purely on severity and travel time.",
+    how: "Satellite-derived soil moisture from SMAP and ERA5-Land, integrated into the trigger index alongside rainfall accumulation at 1, 3, 7 and 15 days.",
+    gap: "No in-situ sensors. The sensor ingest contract is documented and the table exists, but we did not simulate hardware we do not have.",
   },
   {
-    requirement: "Multiple disaster types / regions",
-    status: "planned",
-    how: "The one built scenario is a fixed historical replay: Cyclone Titli, Srikakulam district, 11 October 2018, built from real DEM, rainfall, and cyclone-track data. The risk pipeline itself (DEM plus rainfall plus HAND) is not tied to this one storm or bounding box.",
-    gap: "There is no UI to load a different disaster or region - it would need a new bounding box and a fresh ingest run, not new code.",
+    requirement: "Quantum response allocation",
+    status: "done",
+    how: "Response allocation is formulated as a QUBO and runs on classical solvers (OR-Tools, simulated annealing, greedy) today. The formulation is hardware-ready for quantum backends.",
+    gap: "Quantum is not in the critical path — the system runs with the quantum toolchain uninstalled. We never claim quantum advantage.",
   },
 ]
 
@@ -107,30 +113,24 @@ export function SolutionSummaryPage() {
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <div className="max-w-[820px]">
-        <h2 className="font-display font-semibold text-[20px] text-ink-000">Solution summary</h2>
+        <h2 className="font-display font-semibold text-[20px] text-ink-000">Landslide early warning for the North Eastern Region</h2>
         <p className="text-[13px] text-ink-200 mt-1 leading-relaxed">
-          What's actually solved, at what percent, and how - checked against the hackathon problem statement
-          point by point. Nothing below is claimed without the code behind it.
+          Aizawl district, Mizoram · 284,070 cells at 100 m
         </p>
 
         <div className="mt-5 border border-ground-300 bg-ground-000 p-4">
-          <span className="font-display font-semibold text-[13px] text-ink-000">The two problems, kept separate</span>
-          <p className="text-[12px] text-ink-200 mt-1 leading-relaxed">
-            Q-resQ does two different things. Which areas will flood is a prediction problem, solved with
-            supervised machine learning on real terrain and rainfall data. Given a fixed set of rescue units and
-            open requests, who goes where is a decision problem under hard constraints, solved as a QUBO. Machine
-            learning cannot do the second one - there's no labelled dataset of "optimal rescue decisions," and a
-            neural network can't guarantee it never assigns the same boat twice.
+          <span className="font-display font-semibold text-[13px] text-ink-000">The three claims</span>
+          <p className="text-[12px] text-ink-200 mt-2 leading-relaxed">
+            <span className="font-display uppercase text-[10px] tracking-wide text-ink-300 mr-1">Measured, not only inferred.</span>
+            Susceptibility tells you which slopes could fail. Sentinel-1 interferometry tells you which slope is failing. Steady creep is normal on a hillslope; acceleration is not. Acceleration is the warning signal.
           </p>
           <p className="text-[12px] text-ink-200 mt-2 leading-relaxed">
-            <span className="font-display uppercase text-[10px] tracking-wide text-ink-300 mr-1">
-              On the quantum part
-            </span>
-            QAOA runs for real - Qiskit Aer, depth 3, warm-started from the greedy solution - and is benchmarked
-            head to head against OR-Tools, simulated annealing, and greedy on the same problem instance. At this
-            scale it does not beat the classical solvers: parity at best, sometimes a loss, and the benchmark
-            table on the dispatch panel shows that honestly, losses included. Quantum is never in the critical
-            path - solving always falls back qaoa &rarr; annealing &rarr; greedy, and the last link never fails.
+            <span className="font-display uppercase text-[10px] tracking-wide text-ink-300 mr-1">Isolation is its own axis of urgency.</span>
+            In a flood, people self-evacuate. On a ridge, one blocked road removes every route out. A settlement of forty with no path to the district headquarters can legitimately outrank a larger one that still has a road. Isolation enters the priority score as its own term, not as a proxy for hazard exposure.
+          </p>
+          <p className="text-[12px] text-ink-200 mt-2 leading-relaxed">
+            <span className="font-display uppercase text-[10px] tracking-wide text-ink-300 mr-1">We show you where we do not know.</span>
+            Every cell is labelled with its provenance — learned model or physical index. Deformation renders only inside the processed corridor; outside it the layer is empty and says so. We do not interpolate across ground we did not measure.
           </p>
         </div>
 

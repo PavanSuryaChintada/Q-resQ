@@ -1,8 +1,9 @@
 """Risk grid endpoints. Wired to real computed risk (risk/features.py:
-real Aizawl DEM + rainfall + the heuristic formula) - not a fixture.
-See BUILD_SPEC.md.
+real Aizawl terrain rasters + risk/heuristic.py's landslide
+susceptibility index) - not a fixture. See BUILD_SPEC.md.
 
-No LightGBM model or landslide labels yet - this is the heuristic path.
+No LightGBM model or landslide labels yet - this is the heuristic
+("index") path. Every cell's provenance field says so.
 """
 
 from __future__ import annotations
@@ -41,7 +42,10 @@ def list_cells(band_min: int | None = None) -> RiskCellCollection:
             geometry=GeoJSONGeometry(type="Point", coordinates=[c["lon"], c["lat"]]),
             properties=RiskCellProperties(
                 id=c["id"], hand_m=c["hand_m"], slope_deg=c["slope_deg"],
+                curv_prof=c["curv_prof"], is_cut_slope=c["is_cut_slope"],
+                forest_frac=c["forest_frac"], ls_factor=c["ls_factor"],
                 dist_stream_m=c["dist_stream_m"], risk_score=c["risk_score"], risk_band=c["risk_band"],
+                provenance=c["provenance"],
             ),
         )
         for c in cells
@@ -56,9 +60,17 @@ def cell_detail(cell_id: int) -> RiskCellDetail:
     if cell is None:
         raise HTTPException(status_code=404, detail="risk cell not found")
 
-    contributions = sorted(cell["contributions"].items(), key=lambda kv: kv[1], reverse=True)[:3]
-    raw_values = {"hand": cell["hand_m"], "rain_72h": cell["rain_72h_mm"],
-                  "slope": cell["slope_deg"], "dist_stream": cell["dist_stream_m"], "drainage": 0.5}
+    # risk/features.py exposes susceptibility and trigger contributions
+    # separately (risk = susceptibility * trigger, docs/TRAINING.md #5) -
+    # merged here only for this endpoint's "top contributing features"
+    # ranking, which doesn't care which side of the multiplication a term
+    # came from.
+    all_contributions = {**cell["sus_contributions"], **cell["trigger_contributions"]}
+    contributions = sorted(all_contributions.items(), key=lambda kv: kv[1], reverse=True)[:3]
+    raw_values = {
+        "slope": cell["slope_deg"], "curv_prof": cell["curv_prof"], "is_cut_slope": cell["is_cut_slope"],
+        "forest_frac": cell["forest_frac"], "ls_factor": cell["ls_factor"],
+    }
     return RiskCellDetail(
         id=cell["id"],
         risk_score=cell["risk_score"],

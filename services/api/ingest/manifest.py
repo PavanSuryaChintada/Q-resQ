@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime
 
 from ingest.config import DATA_RAW_DIR
+from config import REGION
 
 SOURCES = {
     "dem_srikakulam.tif": (
@@ -25,6 +26,11 @@ SOURCES = {
         "ODbL 1.0",
     ),
     "waterways.geojson": (
+        "OpenStreetMap, via Overpass API / osmnx",
+        "https://www.openstreetmap.org/copyright",
+        "ODbL 1.0",
+    ),
+    "settlements.geojson": (
         "OpenStreetMap, via Overpass API / osmnx",
         "https://www.openstreetmap.org/copyright",
         "ODbL 1.0",
@@ -74,11 +80,13 @@ SAR_SOURCE = (
 
 
 def generate() -> None:
+    bbox = REGION["bbox"]
     lines = [
         "# Data manifest",
         "",
-        f"Generated {datetime.date.today().isoformat()}. Region: Srikakulam district "
-        "bbox (west=83.30 south=18.00 east=84.55 north=19.25), see ingest/config.py.",
+        f"Generated {datetime.date.today().isoformat()}. Region: {REGION['name']} "
+        f"bbox (west={bbox['west']} south={bbox['south']} east={bbox['east']} north={bbox['north']}), "
+        "see ingest/config.py.",
         "",
         "| File | Source | Licence | Fetched | Size |",
         "|---|---|---|---|---|",

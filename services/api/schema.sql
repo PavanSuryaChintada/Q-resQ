@@ -239,6 +239,20 @@ create table if not exists units (
 create index if not exists units_geom_idx   on units using gist (position);
 create index if not exists units_status_idx on units (status);
 
+-- ===============================================================
+-- RESOURCE POOL  ·  admin-managed available resources by type
+-- ===============================================================
+create table if not exists resource_pool (
+  id          bigserial primary key,
+  kind        text not null check (kind in ('ambulance','rescue_team','truck','excavator','helicopter','boat')),
+  available   integer not null default 0 check (available >= 0),
+  total       integer not null default 0 check (total >= 0),
+  location    geometry(Point, 4326), -- HQ or depot location
+  updated_at  timestamptz default now()
+);
+create index if not exists resource_pool_kind_idx on resource_pool (kind);
+create index if not exists resource_pool_geom_idx on resource_pool using gist (location);
+
 create table if not exists dispatch_rounds (
   id            uuid primary key default gen_random_uuid(),
   started_at    timestamptz default now(),
@@ -331,8 +345,36 @@ alter table citizen_reports enable row level security;
 alter table requests        enable row level security;
 alter table alerts          enable row level security;
 alter table ops_log         enable row level security;
+alter table risk_cells      enable row level security;
+alter table deformation_points enable row level security;
+alter table deformation_series enable row level security;
+alter table insar_corridors enable row level security;
+alter table road_segments   enable row level security;
+alter table settlements     enable row level security;
+alter table facilities      enable row level security;
+alter table report_clusters enable row level security;
+alter table units           enable row level security;
+alter table resource_pool   enable row level security;
+alter table dispatch_rounds enable row level security;
+alter table assignments     enable row level security;
+alter table benchmarks      enable row level security;
+alter table sensor_readings enable row level security;
 
 create policy demo_reports on citizen_reports for all using (true) with check (true);
 create policy demo_requests on requests       for all using (true) with check (true);
 create policy demo_alerts   on alerts         for all using (true) with check (true);
 create policy demo_log      on ops_log        for all using (true) with check (true);
+create policy demo_risk_cells on risk_cells   for all using (true) with check (true);
+create policy demo_deformation_points on deformation_points for all using (true) with check (true);
+create policy demo_deformation_series on deformation_series for all using (true) with check (true);
+create policy demo_insar_corridors on insar_corridors for all using (true) with check (true);
+create policy demo_road_segments on road_segments for all using (true) with check (true);
+create policy demo_settlements on settlements for all using (true) with check (true);
+create policy demo_facilities on facilities for all using (true) with check (true);
+create policy demo_report_clusters on report_clusters for all using (true) with check (true);
+create policy demo_units on units for all using (true) with check (true);
+create policy demo_resource_pool on resource_pool for all using (true) with check (true);
+create policy demo_dispatch_rounds on dispatch_rounds for all using (true) with check (true);
+create policy demo_assignments on assignments for all using (true) with check (true);
+create policy demo_benchmarks on benchmarks for all using (true) with check (true);
+create policy demo_sensor_readings on sensor_readings for all using (true) with check (true);

@@ -12,78 +12,129 @@ interface FlowStep {
 const FLOW_STEPS: FlowStep[] = [
   {
     id: 1,
-    title: "Risk Model",
-    description: "Terrain analysis and rainfall data processed through ML to generate flood risk scores",
+    title: "Terrain",
+    description: "Copernicus DEM at 30 m, resampled to a 100 m analysis grid. 284,070 cells.",
     details: [
       "DEM (Digital Elevation Model) provides terrain height data",
+      "Slope, aspect (encoded as sin/cos), plan and profile curvature derived",
+      "LS factor (slope length factor) computed",
       "HAND (Height Above Nearest Drainage) computed via pysheds",
-      "Slope and Topographic Wetness Index derived from terrain",
-      "72-hour rainfall data from IMD RF25 gridded dataset",
-      "Physical risk formula: HAND 40% + rain 30% + slope 15% + dist-stream 10% + drainage 5%",
-      "LightGBM model trained on SAR flood labels (when available)"
+      "Topographic Wetness Index (TWI) derived",
+      "Distance to stream computed",
+      "Distance to road cut: within 50 m of road centreline and steeper than 25°",
+      "All geometric derivations — deterministic, not learned"
     ],
-    input: ["DEM (elevation)", "Rainfall data", "Slope & drainage"],
-    output: "Risk map with cell scores"
+    input: ["Copernicus DEM 30 m"],
+    output: "100 m grid with terrain features"
   },
   {
     id: 2,
-    title: "Triage & Roads",
-    description: "Request severity scoring and flood-aware road network passability computation",
+    title: "Susceptibility",
+    description: "Physical index over slope, profile curvature, cut-slope proximity, forest cover and LS factor.",
     details: [
-      "Severity computed from: people count + category + area risk + wait time",
-      "Medical requests weighted highest (1.0), stranded (0.7), evacuation (0.5)",
-      "Components normalised against current queue maximums for relative scoring",
-      "Road network extracted from OpenStreetMap via osmnx",
-      "Edge weights updated based on flood depth and passability",
-      "Travel times computed over flood-aware graph, not straight-line distance"
+      "Physical index: weighted sum of terrain features",
+      "Weights: slope 0.35, profile curvature 0.25, cut-slope 0.20, forest cover 0.15, LS factor 0.05",
+      "Lithology weight renormalised when unavailable (not fabricated)",
+      "Risk score 0–1 per cell, banded to IMD warning ladder",
+      "Every cell carries provenance flag: index or model",
+      "When inventory data allows, LightGBM model replaces index"
     ],
-    input: ["Risk scores", "Rescue requests", "Road network"],
-    output: "Severity per request + travel times"
+    input: ["Terrain features", "Forest cover", "Lithology (optional)"],
+    output: "Susceptibility per cell"
   },
   {
     id: 3,
-    title: "Partition",
-    description: "Geographic clustering into zones of ≤5 requests and ≤4 units for parallel solving",
+    title: "Trigger",
+    description: "Rainfall accumulation at 1, 3, 7 and 15 days, plus maximum hourly intensity and soil moisture.",
     details: [
-      "Constrained k-means clustering with geographic constraints",
-      "Zone cap: ≤ 5 requests, ≤ 4 units per zone (20 qubits target)",
-      "Balances severity total across zones for fair distribution",
-      "Enables horizontal scaling as request count grows",
-      "Qubit count per solve stays constant regardless of total requests",
-      "Zones solved in parallel using ProcessPoolExecutor"
+      "Rainfall accumulation at multiple time windows",
+      "Maximum hourly intensity captured",
+      "Soil moisture from SMAP and ERA5-Land (satellite-derived)",
+      "The 15-day window matters: slopes fail after sustained saturation followed by intensity spike",
+      "risk = susceptibility × trigger, both components exposed separately",
+      "Trigger index runs independently of susceptibility"
     ],
-    input: ["Requests with severity", "Available units", "Travel times"],
-    output: "Optimized zones"
+    input: ["Rainfall data", "Soil moisture"],
+    output: "Trigger index per cell"
   },
   {
     id: 4,
-    title: "QUBO Solve",
-    description: "Quantum-inspired optimization per zone with fallback chain (QAOA → annealing → greedy)",
+    title: "Deformation",
+    description: "Sentinel-1 InSAR, SBAS, pre-computed for demo corridor.",
     details: [
-      "QUBO formulation: minimise cost + penalty constraints",
-      "Cost: maximise severity assignment, minimise travel time",
-      "Constraints: each request served at most once, each unit dispatched at most once",
-      "Auto-tuned penalty weights from objective bound (λ = 1.2 × bound)",
-      "Fallback chain: QAOA (10s timeout) → Simulated Annealing → Greedy",
-      "Greedy solver has no dependencies, never fails"
+      "Line-of-sight velocity computed from Sentinel-1 interferometry",
+      "Acceleration derived from velocity change over time",
+      "Points classified: stable (below 5 mm/yr), creeping, accelerating",
+      "Acceleration is the alert signal, not movement itself",
+      "Points below 0.3 coherence discarded (vegetated hillslopes decorrelate)",
+      "Renders only inside processed corridor, empty outside"
     ],
-    input: ["Zone requests", "Zone units", "Travel costs"],
-    output: "Unit-to-request assignments"
+    input: ["Sentinel-1 SAR data"],
+    output: "Deformation time series with alert state"
   },
   {
     id: 5,
-    title: "Route & Validate",
-    description: "Shortest path computation and constraint validation before final dispatch",
+    title: "Roads & Isolation",
+    description: "Blocked segments removed from graph, connected components recomputed.",
     details: [
-      "Shortest path computed over flood-aware road network",
-      "Constraint validation: no double-assignment of units or requests",
-      "If validation fails, falls back to next solver in chain",
-      "Routes returned as LineString geometries for map display",
-      "Assignment persisted to database with round metadata",
-      "Realtime broadcast to all connected dashboard clients"
+      "OSM road network extracted via osmnx",
+      "Blockage has three sources: predicted, reported, confirmed",
+      "Blocked segments removed from graph",
+      "Connected components recomputed",
+      "For each settlement: component size, population, path to district headquarters",
+      "No path to HQ = isolation score 1.0",
+      "Blockage source shown (predicted vs reported vs confirmed)"
     ],
-    input: ["Assignments", "Flood-aware graph"],
-    output: "Validated routes for dispatch"
+    input: ["OSM road network", "Blockage reports"],
+    output: "Settlement isolation scores"
+  },
+  {
+    id: 6,
+    title: "Triage",
+    description: "Weighted score with explicit isolation term.",
+    details: [
+      "Severity = 0.28·persons + 0.28·category + 0.22·area_risk + 0.12·wait + 0.10·isolation",
+      "All five components stored individually",
+      "If a household was reached late, district can see exactly why",
+      "Weights are policy conversation, not hidden magic",
+      "Isolation enters as its own term, not proxy for hazard exposure",
+      "Request queue sorted by severity"
+    ],
+    input: ["Requests", "Area risk", "Isolation scores"],
+    output: "Severity per request"
+  },
+  {
+    id: 7,
+    title: "Dispatch",
+    description: "Requests partition into geographic zones, each becomes a QUBO, zones solve in parallel.",
+    details: [
+      "Geographic partitioning: ≤5 requests, ≤4 units per zone",
+      "Each zone becomes a QUBO optimisation problem",
+      "QUBO formulation: maximise severity assignment, minimise travel time",
+      "Constraints: each request served at most once, each unit dispatched at most once",
+      "Solver is runtime parameter: OR-Tools, simulated annealing, greedy, QAOA",
+      "Fallback chain ends in dependency-free greedy heuristic",
+      "Zones solved in parallel for horizontal scaling"
+    ],
+    input: ["Requests with severity", "Available units", "Travel costs"],
+    output: "Unit-to-request assignments"
+  },
+  {
+    id: 8,
+    title: "The Loop Closes",
+    description: "Citizen report of blocked road updates graph, which changes isolation, which changes severity.",
+    details: [
+      "Citizen submits report via PWA (offline-capable)",
+      "Report queued and clustered with nearby reports",
+      "Confirmed blockage updates road graph",
+      "Graph changes connected components",
+      "Isolation score recalculates for affected settlements",
+      "Isolation changes severity",
+      "Severity changes dispatch allocation",
+      "That loop is the product"
+    ],
+    input: ["Citizen reports"],
+    output: "Updated dispatch allocation"
   }
 ]
 
@@ -109,9 +160,9 @@ export function FlowPage() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
-      <h1 className="font-display font-semibold text-[18px] text-ink-000 mb-1">Pipeline Flow</h1>
+      <h1 className="font-display font-semibold text-[18px] text-ink-000 mb-1">How a warning becomes a decision</h1>
       <p className="text-[13px] text-ink-200 mb-6 max-w-2xl">
-        Step-by-step visualization of how prediction and decision-making work together to prioritise rescue operations.
+        Eight stages from terrain to dispatch, with deformation measurement and isolation analysis as the headline differentiators.
       </p>
       
       {/* Progress indicator */}

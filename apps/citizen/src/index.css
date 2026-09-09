@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Ground — warm bone. Readable in sunlight. */
+    --ground-000: #F4F1EA;
+    --ground-100: #FFFFFF;
+    --ground-200: #E8E3D8;
+    --ground-300: #D2CCBE;
+    --ground-400: #A8A091;
+
+    /* Ink — near-black, high contrast */
+    --ink-000: #14181A;
+    --ink-100: #3A4145;
+    --ink-200: #6B7276;
+    --ink-300: #9AA0A3;
+
+    /* Severity — IMD warning ladder */
+    --sev-0: #3D6B4F;
+    --sev-1: #B8901F;
+    --sev-2: #C26A15;
+    --sev-3: #B02E18;
+    --sev-4: #6E1810;
+
+    --emergency: #B02E18;
+  }
+
+  body {
+    @apply bg-ground-000 text-ink-000 min-h-screen;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 16px;
+  }
+
+  * {
+    @apply focus-visible:outline-none;
+  }
+
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-ink-000;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-ground-400 border border-ground-400 text-ink-000 px-4 py-2 text-sm font-display uppercase tracking-wide;
+    min-height: 56px;
+  }
+
+  .btn-primary:active {
+    @apply bg-ground-300;
+  }
+
+  .btn-emergency {
+    @apply bg-emergency text-white px-4 py-2 text-sm font-display uppercase tracking-wide;
+    min-height: 96px;
+  }
+
+  .btn-emergency:active {
+    @apply opacity-90;
+  }
+
+  .card {
+    @apply border border-ground-300 bg-ground-100 p-4;
+  }
+}

@@ -53,6 +53,16 @@ export interface RequestOut {
   sev_wait?: number | null
 }
 
+export interface ReportOut {
+  id: string
+  location: [number, number]
+  kind: "crack" | "slope_movement" | "road_blocked" | "water_seepage" | "other"
+  note: string | null
+  status: "pending" | "verified" | "dismissed" | "duplicate"
+  created_at: string
+  reporter_hash: string
+}
+
 export interface UnitOut {
   id: string
   label: string
@@ -108,6 +118,39 @@ export interface LogLine {
   message: string
 }
 
+export interface SettlementIsolationOut {
+  id: number
+  name: string
+  population: number | null
+  isolated: boolean
+  isolation_score: number
+  component_size: number
+  path_to_hq: boolean
+  lon: number | null
+  lat: number | null
+}
+
+export interface DemoTriggerOut {
+  way_id: string
+  ref: string
+  isolated_settlements: string[]
+  backup_way_id: string | null
+}
+
+export interface RoadGeometry {
+  type: "LineString"
+  coordinates: [number, number][]
+}
+
+export interface RoadBlockResult {
+  way_id: string
+  segment_id: number
+  blocked: boolean
+  isolated_settlements: string[]
+  geom: RoadGeometry | null
+  message: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -145,6 +188,11 @@ export const api = {
     created_at: string
   }) => request<RequestOut>("/requests", { method: "POST", body: JSON.stringify(payload) }),
 
+  reports: (status?: string) =>
+    request<ReportOut[]>(`/reports${status ? `?status=${status}` : ""}`),
+  updateReport: (id: string, status: string) =>
+    request<ReportOut>(`/reports/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+
   units: () => request<UnitOut[]>("/units"),
 
   assignments: () => request<AssignmentOut[]>("/dispatch/assignments"),
@@ -168,4 +216,13 @@ export const api = {
     }),
 
   log: (since?: number) => request<LogLine[]>(`/log${since ? `?since=${since}` : ""}`),
+
+  isolation: () => request<SettlementIsolationOut[]>("/roads/isolation"),
+  demoTrigger: () => request<DemoTriggerOut>("/roads/demo/trigger"),
+  blockDemoTrigger: () => request<RoadBlockResult>("/roads/demo/block", { method: "POST" }),
+  clearRoadSegment: (segmentId: number) =>
+    request<{ segment_id: number; blocked: boolean }>("/roads/clear", {
+      method: "POST",
+      body: JSON.stringify({ segment_id: segmentId }),
+    }),
 }

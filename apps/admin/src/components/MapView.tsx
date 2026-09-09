@@ -8,7 +8,7 @@ type FeatureCollection = {
   type: "FeatureCollection"
   features: Array<{
     type: "Feature"
-    geometry: { type: "Point" | "LineString"; coordinates: number[] | number[][] }
+    geometry: { type: "Point" | "LineString" | "Polygon"; coordinates: number[] | number[][] | number[][][] }
     properties: Record<string, unknown>
   }>
 }
@@ -56,6 +56,15 @@ interface Props {
   onSelectCell?: (id: number) => void
   showRoutes?: boolean
   selectedRequestId?: string | null
+  selectedReportId?: string | null
+  reports?: Array<{
+    id: string
+    location: [number, number]
+    kind: string
+    status: string
+  }>
+  blockedRoadGeom?: { type: "LineString"; coordinates: [number, number][] } | null
+  isolatedSettlements?: Array<{ name: string; lon: number; lat: number }>
 }
 
 /** True once addSource/addLayer for every layer this component owns
@@ -68,7 +77,8 @@ interface Props {
  */
 export function MapView({
   riskCells, units, requests, assignments, center, onSelectCell,
-  showRoutes = true, selectedRequestId,
+  showRoutes = true, selectedRequestId, selectedReportId, reports,
+  blockedRoadGeom, isolatedSettlements,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
@@ -217,6 +227,84 @@ export function MapView({
           console.log("[MapView] requests layers added ok")
         }
 
+        if (!map.getSource("reports")) {
+          map.addSource("reports", { type: "geojson", data: EMPTY_FC })
+          map.addLayer({
+            id: "reports-points",
+            type: "circle",
+            source: "reports",
+            paint: {
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 6, 10, 8, 15, 10],
+              "circle-color": "#C9A227", // Orange for citizen reports
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#101A1E",
+            },
+          })
+          map.addLayer({
+            id: "reports-pulse",
+            type: "circle",
+            source: "reports",
+            paint: {
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 12, 10, 16, 15, 20],
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#C9A227",
+              "circle-stroke-opacity": 0.3,
+              "circle-color": "transparent",
+            },
+          })
+          // eslint-disable-next-line no-console
+          console.log("[MapView] reports layers added ok")
+        }
+
+        if (!map.getSource("blocked-road")) {
+          // The real blocked road SEGMENT (its actual LineString geometry,
+          // not a fixed-radius square around a hardcoded point) plus the
+          // settlements that isolation.py actually computed as cut off.
+          map.addSource("blocked-road", { type: "geojson", data: EMPTY_FC })
+          map.addLayer({
+            id: "blocked-road-line",
+            type: "line",
+            source: "blocked-road",
+            layout: { "line-cap": "round" },
+            paint: {
+              "line-color": "#C23B22",
+              "line-width": 5,
+              "line-dasharray": [0.2, 1.5],
+            },
+          })
+
+          map.addSource("isolated-settlements", { type: "geojson", data: EMPTY_FC })
+          map.addLayer({
+            id: "isolated-settlements-points",
+            type: "circle",
+            source: "isolated-settlements",
+            paint: {
+              "circle-radius": 7,
+              "circle-color": "#C23B22",
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#F0EBE1",
+            },
+          })
+          map.addLayer({
+            id: "isolated-settlements-labels",
+            type: "symbol",
+            source: "isolated-settlements",
+            layout: {
+              "text-field": ["get", "name"],
+              "text-size": 12,
+              "text-offset": [0, 1.2],
+              "text-anchor": "top",
+            },
+            paint: {
+              "text-color": "#F0EBE1",
+              "text-halo-color": "#101A1E",
+              "text-halo-width": 1.5,
+            },
+          })
+          // eslint-disable-next-line no-console
+          console.log("[MapView] blocked-road / isolated-settlements layers added ok")
+        }
+
         setReady(true)
         // eslint-disable-next-line no-console
         console.log("[MapView] setup() complete, ready=true")
@@ -293,21 +381,60 @@ export function MapView({
 
   useEffect(() => {
     const map = mapRef.current
+    // eslint-disable-next-line no-console
+    console.log("[MapView] reports effect:", { hasMap: !!map, ready, reportCount: reports?.length })
+    if (!map || !ready || !reports) return
+    const geojson: FeatureCollection = {
+      type: "FeatureCollection",
+      features: reports.map((r) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [r.location[1], r.location[0]] },
+        properties: { id: r.id, kind: r.kind, status: r.status },
+      })),
+    }
+    const src = map.getSource<GeoJSONSource>("reports")
+    // eslint-disable-next-line no-console
+    console.log("[MapView] reports source found:", !!src, "first feature:", geojson.features[0])
+    src?.setData(geojson)
+  }, [ready, reports])
+
+  useEffect(() => {
+    const map = mapRef.current
     if (!map || !ready || !assignments || !units || !requests) return
+
+    // Rank assignments by their request's severity, highest first - this
+    // is "who gets rescued first" made visible on the map, not just in
+    // the request queue's sort order.
+    const rankById = new Map<string, number>()
+    ;[...assignments]
+      .sort((a, b) => {
+        const ra = requests.find((r) => r.id === a.request_id)
+        const rb = requests.find((r) => r.id === b.request_id)
+        return (rb?.severity ?? 0) - (ra?.severity ?? 0)
+      })
+      .forEach((a, i) => rankById.set(a.request_id, i + 1))
+
     const features: FeatureCollection["features"] = assignments
       .map((assignment) => {
         const unit = units.find((u) => u.id === assignment.unit_id)
         const request = requests.find((r) => r.id === assignment.request_id)
         if (!unit || !request || !assignment.route) return null
+        const rank = rankById.get(assignment.request_id)
+        const eta = assignment.travel_s != null ? `${Math.round(assignment.travel_s / 60)} min` : null
+        const risk = request.sev_area_risk != null ? `risk ${request.sev_area_risk.toFixed(2)}` : null
         return {
           type: "Feature" as const,
           geometry: assignment.route,
           properties: {
             unit_id: assignment.unit_id,
             request_id: assignment.request_id,
-            unit_tag: `${unit.kind.toUpperCase()} · ${unit.label}${
-              assignment.route_source === "road" ? " · ROAD" : ""
-            }`,
+            unit_tag: [
+              `#${rank}`,
+              `${unit.kind.toUpperCase()} · ${unit.label}`,
+              assignment.route_source === "road" ? "ROAD" : null,
+              eta,
+              risk,
+            ].filter(Boolean).join(" · "),
           },
         }
       })
@@ -331,6 +458,46 @@ export function MapView({
     if (!selected) return
     map.flyTo({ center: [selected.location[1], selected.location[0]], zoom: 14, duration: 1000 })
   }, [ready, selectedRequestId, requests])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready || !selectedReportId || !reports) return
+    const selected = reports.find((r) => r.id === selectedReportId)
+    if (!selected) return
+    map.flyTo({ center: [selected.location[1], selected.location[0]], zoom: 14, duration: 1000 })
+  }, [ready, selectedReportId, reports])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return
+
+    const roadSrc = map.getSource<GeoJSONSource>("blocked-road")
+    if (blockedRoadGeom) {
+      roadSrc?.setData({
+        type: "FeatureCollection",
+        features: [{ type: "Feature", geometry: blockedRoadGeom, properties: {} }],
+      })
+    } else {
+      roadSrc?.setData(EMPTY_FC)
+    }
+
+    const settlementSrc = map.getSource<GeoJSONSource>("isolated-settlements")
+    if (isolatedSettlements && isolatedSettlements.length > 0) {
+      settlementSrc?.setData({
+        type: "FeatureCollection",
+        features: isolatedSettlements.map((s) => ({
+          type: "Feature" as const,
+          geometry: { type: "Point" as const, coordinates: [s.lon, s.lat] },
+          properties: { name: s.name },
+        })),
+      })
+      const midpoint = blockedRoadGeom?.coordinates[Math.floor(blockedRoadGeom.coordinates.length / 2)]
+      const flyTarget = midpoint ?? [isolatedSettlements[0].lon, isolatedSettlements[0].lat]
+      map.flyTo({ center: flyTarget as [number, number], zoom: 12, duration: 1000 })
+    } else {
+      settlementSrc?.setData(EMPTY_FC)
+    }
+  }, [ready, blockedRoadGeom, isolatedSettlements])
 
   return <div ref={containerRef} className="w-full h-full" />
 }

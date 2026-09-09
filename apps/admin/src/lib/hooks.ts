@@ -28,6 +28,10 @@ export function useAssignments() {
   return useQuery({ queryKey: ["assignments"], queryFn: api.assignments, refetchInterval: 4000 })
 }
 
+export function useReports(status?: string) {
+  return useQuery({ queryKey: ["reports", status], queryFn: () => api.reports(status), refetchInterval: 4000 })
+}
+
 export function useLog(since?: number) {
   return useQuery({ queryKey: ["log", since], queryFn: () => api.log(since), refetchInterval: 2000 })
 }
@@ -76,6 +80,32 @@ export function useRunBenchmark() {
   return useMutation({
     mutationFn: (backends?: Backend[]) => api.runBenchmark(backends),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["log"] })
+    },
+  })
+}
+
+export function useIsolation() {
+  return useQuery({ queryKey: ["isolation"], queryFn: api.isolation, refetchInterval: 5000 })
+}
+
+export function useBlockDemoTrigger() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.blockDemoTrigger,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["isolation"] })
+      qc.invalidateQueries({ queryKey: ["log"] })
+    },
+  })
+}
+
+export function useClearRoadSegment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (segmentId: number) => api.clearRoadSegment(segmentId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["isolation"] })
       qc.invalidateQueries({ queryKey: ["log"] })
     },
   })

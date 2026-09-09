@@ -28,10 +28,17 @@ class RiskCellProperties(BaseModel):
     elevation_m: float | None = None
     hand_m: float | None = None
     slope_deg: float | None = None
+    curv_prof: float | None = None
+    is_cut_slope: bool | None = None
+    forest_frac: float | None = None
+    ls_factor: float | None = None
     twi: float | None = None
     dist_stream_m: float | None = None
+    susceptibility: float | None = None
+    trigger_score: float | None = None
     risk_score: float | None = None
     risk_band: int | None = None
+    provenance: Literal["index", "model"] | None = None
 
 
 class GeoJSONGeometry(BaseModel):
