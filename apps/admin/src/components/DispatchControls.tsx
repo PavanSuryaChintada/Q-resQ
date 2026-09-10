@@ -52,13 +52,23 @@ export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
   const [resultsOpen, setResultsOpen] = useState(true)
   const hasResults = Boolean(solve.data || rows)
 
+  const [seedError, setSeedError] = useState<string | null>(null)
+
   const handleSeedDemoData = async () => {
     setSeeding(true)
+    setSeedError(null)
     const count = 8
-    for (let i = 0; i < count; i++) {
-      await createRequest.mutateAsync(randomDemoRequest())
+    try {
+      for (let i = 0; i < count; i++) {
+        await createRequest.mutateAsync(randomDemoRequest())
+      }
+    } catch (err) {
+      setSeedError(err instanceof Error ? err.message : "Seeding failed - see console")
+      // eslint-disable-next-line no-console
+      console.error("[seed demo data] failed:", err)
+    } finally {
+      setSeeding(false)
     }
-    setSeeding(false)
   }
 
   return (
@@ -96,6 +106,7 @@ export function DispatchControls({ showRoutes, onToggleRoutes }: Props) {
           >
             {seeding ? "Seeding..." : "Seed demo data"}
           </button>
+          {seedError && <span className="ml-2 text-[11px] text-sev-3">{seedError}</span>}
         </div>
 
         <span className="w-px h-5 bg-ground-300" />

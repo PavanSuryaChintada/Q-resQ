@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { submitReport, getAlerts, syncOfflineReports, getQueueCount } from './lib/api'
+import { CameraCapture } from './CameraCapture'
 import {
   HomeIcon, WarningIcon, BellIcon, UserIcon, CameraIcon, GalleryIcon,
   CheckIcon, CloseIcon, ShieldIcon, SyncIcon,
@@ -38,6 +39,7 @@ function App() {
   const [note, setNote] = useState('')
   const [photo, setPhoto] = useState<string | null>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
+  const [showCamera, setShowCamera] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitResult, setSubmitResult] = useState<{queued?: boolean; id?: string} | null>(null)
   const [queueCount, setQueueCount] = useState(0)
@@ -210,6 +212,16 @@ function App() {
 
   return (
     <div className="min-h-screen bg-ground-000 text-ink-000 flex flex-col">
+      {showCamera && (
+        <CameraCapture
+          onClose={() => setShowCamera(false)}
+          onCapture={(dataUrl) => {
+            setPhoto(dataUrl)
+            setPhotoError(null)
+            setShowCamera(false)
+          }}
+        />
+      )}
       {/* Header */}
       <header className="sticky top-0 z-10 h-14 border-b border-ground-300 bg-ground-100/95 backdrop-blur px-4 flex items-center justify-between shadow-sm shrink-0">
         <div className="flex items-center gap-2">
@@ -465,19 +477,11 @@ function App() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => document.getElementById('camera-input')?.click()}
+                  onClick={() => setShowCamera(true)}
                   className="flex flex-col items-center justify-center gap-1.5 h-24 rounded-2xl border-2 border-dashed border-ground-400 bg-ground-100 text-ink-100 text-13 font-medium shadow-sm cursor-pointer active:bg-ground-200"
                 >
                   <CameraIcon className="w-6 h-6" />
                   Take photo
-                  <input
-                    id="camera-input"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handlePhotoChange}
-                    className="hidden"
-                  />
                 </button>
                 <button
                   onClick={() => document.getElementById('gallery-input')?.click()}

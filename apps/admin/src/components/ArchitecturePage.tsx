@@ -12,6 +12,7 @@ interface ArchitectureNode {
   width: number
   height: number
   category: "frontend" | "backend" | "data" | "optimization" | "ingest"
+  status: Block["status"]
 }
 
 interface ArchitectureConnection {
@@ -39,48 +40,59 @@ const CATEGORY_COLOR: Record<ArchitectureNode["category"], string> = {
   ingest: "#7A1E14",
 }
 
+// Grid: columns 180px apart, rows 130px apart, nodes 150x64 - wide gaps
+// so edge labels never sit on top of a node or another line.
+const COL = (n: number) => 40 + n * 180
+const ROW = (n: number) => 40 + n * 130
+const NODE_W = 150
+const NODE_H = 64
+
 const ARCHITECTURE_NODES: ArchitectureNode[] = [
-  // Frontend layer
-  { id: "web", label: "Web App\n(Vite + React)", x: 50, y: 50, width: 120, height: 60, category: "frontend" },
-  { id: "map", label: "MapLibre GL\nRisk Map", x: 200, y: 50, width: 120, height: 60, category: "frontend" },
+  // Row 0: frontend
+  { id: "web", label: "Web App\nVite + React", x: COL(0), y: ROW(0), width: NODE_W, height: NODE_H, category: "frontend", status: "partial" },
+  { id: "map", label: "MapLibre GL\nRisk Map", x: COL(1), y: ROW(0), width: NODE_W, height: NODE_H, category: "frontend", status: "partial" },
+  { id: "citizen", label: "Citizen PWA\nReports + SOS", x: COL(2), y: ROW(0), width: NODE_W, height: NODE_H, category: "frontend", status: "done" },
 
-  // Backend layer
-  { id: "api", label: "FastAPI\nServices", x: 50, y: 180, width: 120, height: 60, category: "backend" },
-  { id: "risk", label: "Risk Service\nSusceptibility", x: 200, y: 180, width: 120, height: 60, category: "backend" },
-  { id: "insar", label: "InSAR Service\nDeformation", x: 350, y: 180, width: 120, height: 60, category: "backend" },
-  { id: "roads", label: "Roads Service\nIsolation", x: 500, y: 180, width: 120, height: 60, category: "backend" },
-  { id: "dispatch", label: "Dispatch Service\nTriage + Routes", x: 50, y: 260, width: 120, height: 60, category: "backend" },
+  // Row 1: backend services
+  { id: "api", label: "FastAPI\nRouters", x: COL(0), y: ROW(1), width: NODE_W, height: NODE_H, category: "backend", status: "partial" },
+  { id: "risk", label: "Risk\nSusceptibility", x: COL(1), y: ROW(1), width: NODE_W, height: NODE_H, category: "backend", status: "done" },
+  { id: "insar", label: "InSAR\nDeformation", x: COL(2), y: ROW(1), width: NODE_W, height: NODE_H, category: "backend", status: "done" },
+  { id: "roads", label: "Roads\nIsolation", x: COL(3), y: ROW(1), width: NODE_W, height: NODE_H, category: "backend", status: "done" },
+  { id: "dispatch", label: "Dispatch\nTriage + Routes", x: COL(4), y: ROW(1), width: NODE_W, height: NODE_H, category: "backend", status: "done" },
 
-  // Data layer
-  { id: "supabase", label: "Supabase\nPostgres + PostGIS", x: 200, y: 260, width: 140, height: 60, category: "data" },
-  { id: "realtime", label: "Supabase\nRealtime", x: 370, y: 260, width: 120, height: 60, category: "data" },
+  // Row 2: data + optimization
+  { id: "reports_alerts", label: "Reports +\nAlerts (CAP)", x: COL(0), y: ROW(2), width: NODE_W, height: NODE_H, category: "backend", status: "done" },
+  { id: "supabase", label: "Supabase\nPostgres + PostGIS", x: COL(1), y: ROW(2), width: NODE_W, height: NODE_H, category: "data", status: "done" },
+  { id: "realtime", label: "Supabase\nRealtime", x: COL(2), y: ROW(2), width: NODE_W, height: NODE_H, category: "data", status: "planned" },
+  { id: "qubo", label: "QUBO Dispatch\nPackage", x: COL(3), y: ROW(2), width: NODE_W, height: NODE_H, category: "optimization", status: "done" },
 
-  // Optimization layer
-  { id: "qubo", label: "QUBO Dispatch\nPackage", x: 500, y: 260, width: 120, height: 60, category: "optimization" },
-
-  // Ingest layer
-  { id: "dem", label: "DEM Ingest\nCopernicus", x: 50, y: 360, width: 120, height: 60, category: "ingest" },
-  { id: "insar_data", label: "InSAR Data\nSentinel-1", x: 200, y: 360, width: 120, height: 60, category: "ingest" },
-  { id: "osm", label: "OSM\nRoad Network", x: 350, y: 360, width: 120, height: 60, category: "ingest" },
-  { id: "rain", label: "Rainfall\nSMAP + ERA5", x: 500, y: 360, width: 120, height: 60, category: "ingest" },
+  // Row 3: ingest
+  { id: "dem", label: "DEM Ingest\nCopernicus", x: COL(0), y: ROW(3), width: NODE_W, height: NODE_H, category: "ingest", status: "done" },
+  { id: "insar_data", label: "InSAR Data\nSentinel-1 (synthetic)", x: COL(1), y: ROW(3), width: NODE_W, height: NODE_H, category: "ingest", status: "partial" },
+  { id: "osm", label: "OSM\nRoad Network", x: COL(2), y: ROW(3), width: NODE_W, height: NODE_H, category: "ingest", status: "done" },
+  { id: "rain", label: "Rainfall\nSMAP + ERA5 (synthetic)", x: COL(3), y: ROW(3), width: NODE_W, height: NODE_H, category: "ingest", status: "partial" },
 ]
 
 const ARCHITECTURE_CONNECTIONS: ArchitectureConnection[] = [
   { from: "web", to: "api", label: "HTTP" },
   { from: "web", to: "map", label: "render" },
+  { from: "citizen", to: "api", label: "HTTP" },
   { from: "map", to: "api", label: "GeoJSON" },
   { from: "api", to: "risk", label: "call" },
   { from: "api", to: "insar", label: "call" },
   { from: "api", to: "roads", label: "call" },
   { from: "api", to: "dispatch", label: "call" },
+  { from: "api", to: "reports_alerts", label: "call" },
   { from: "api", to: "supabase", label: "SQL" },
   { from: "api", to: "realtime", label: "subscribe" },
   { from: "dispatch", to: "qubo", label: "solve()" },
+  { from: "dispatch", to: "roads", label: "isolation" },
   { from: "risk", to: "dem", label: "load" },
   { from: "insar", to: "insar_data", label: "load" },
   { from: "roads", to: "osm", label: "load" },
   { from: "risk", to: "rain", label: "load" },
   { from: "supabase", to: "realtime", label: "broadcast" },
+  { from: "reports_alerts", to: "supabase", label: "SQL" },
 ]
 
 function Card({ block }: { block: Block }) {
@@ -96,62 +108,60 @@ function Card({ block }: { block: Block }) {
   )
 }
 
+const DIAGRAM_W = COL(4) + NODE_W + 40
+const DIAGRAM_H = ROW(3) + NODE_H + 40
+
 function ArchitectureDiagram() {
   return (
     <div className="mt-8 border border-ground-300 bg-ground-000 p-4">
-      <h3 className="font-display font-semibold text-[14px] text-ink-000 mb-4">System Architecture Diagram</h3>
-      <div className="relative" style={{ height: "450px", width: "100%" }}>
-        <svg width="100%" height="100%" viewBox="0 0 650 450">
-          {/* Connection lines */}
+      <h3 className="font-display font-semibold text-[14px] text-ink-000 mb-1">System architecture diagram</h3>
+      <p className="text-[11px] text-ink-300 mb-4">
+        Node border colour is build status (see legend below) - the same status this whole page reports, not decoration.
+      </p>
+      <div className="relative w-full overflow-x-auto">
+        <svg width="100%" height={DIAGRAM_H} viewBox={`0 0 ${DIAGRAM_W} ${DIAGRAM_H}`} style={{ minWidth: 820 }}>
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#6B6862" />
+            </marker>
+          </defs>
+
+          {/* Connection lines, drawn first so nodes sit on top */}
           {ARCHITECTURE_CONNECTIONS.map((conn, i) => {
-            const fromNode = ARCHITECTURE_NODES.find(n => n.id === conn.from)
-            const toNode = ARCHITECTURE_NODES.find(n => n.id === conn.to)
+            const fromNode = ARCHITECTURE_NODES.find((n) => n.id === conn.from)
+            const toNode = ARCHITECTURE_NODES.find((n) => n.id === conn.to)
             if (!fromNode || !toNode) return null
-            
-            const fromX = fromNode.x + fromNode.width / 2
-            const fromY = fromNode.y + fromNode.height / 2
-            const toX = toNode.x + toNode.width / 2
-            const toY = toNode.y + toNode.height / 2
-            
+
+            const fromCx = fromNode.x + fromNode.width / 2
+            const fromCy = fromNode.y + fromNode.height / 2
+            const toCx = toNode.x + toNode.width / 2
+            const toCy = toNode.y + toNode.height / 2
+
+            // Clip the line to each box's edge (not its centre) so arrows
+            // land on the border, and route from the nearer face when
+            // nodes are stacked vertically vs. side by side.
+            const dx = toCx - fromCx
+            const dy = toCy - fromCy
+            const vertical = Math.abs(dy) > Math.abs(dx)
+            const fromX = vertical ? fromCx : fromCx + Math.sign(dx) * (fromNode.width / 2)
+            const fromY = vertical ? fromCy + Math.sign(dy) * (fromNode.height / 2) : fromCy
+            const toX = vertical ? toCx : toCx - Math.sign(dx) * (toNode.width / 2)
+            const toY = vertical ? toCy - Math.sign(dy) * (toNode.height / 2) : toCy
+            const midX = (fromX + toX) / 2
+            const midY = (fromY + toY) / 2
+            const labelW = conn.label.length * 5.2 + 8
+
             return (
               <g key={i}>
-                <line
-                  x1={fromX}
-                  y1={fromY}
-                  x2={toX}
-                  y2={toY}
-                  stroke="#6B6862"
-                  strokeWidth="1.5"
-                  markerEnd="url(#arrowhead)"
-                />
-                <text
-                  x={(fromX + toX) / 2}
-                  y={(fromY + toY) / 2 - 5}
-                  fontSize="9"
-                  fill="#6B6862"
-                  textAnchor="middle"
-                  className="font-data"
-                >
+                <line x1={fromX} y1={fromY} x2={toX} y2={toY} stroke="#6B6862" strokeWidth="1.25" markerEnd="url(#arrowhead)" />
+                <rect x={midX - labelW / 2} y={midY - 8} width={labelW} height={13} fill="#101A1E" />
+                <text x={midX} y={midY + 2} fontSize="9" fill="#9A968D" textAnchor="middle" className="font-data">
                   {conn.label}
                 </text>
               </g>
             )
           })}
-          
-          {/* Arrow marker definition */}
-          <defs>
-            <marker
-              id="arrowhead"
-              markerWidth="10"
-              markerHeight="7"
-              refX="9"
-              refY="3.5"
-              orient="auto"
-            >
-              <polygon points="0 0, 10 3.5, 0 7" fill="#6B6862" />
-            </marker>
-          </defs>
-          
+
           {/* Nodes */}
           {ARCHITECTURE_NODES.map((node) => (
             <g key={node.id}>
@@ -161,41 +171,36 @@ function ArchitectureDiagram() {
                 width={node.width}
                 height={node.height}
                 fill={CATEGORY_COLOR[node.category]}
-                stroke="#101A1E"
-                strokeWidth="1"
+                stroke={STATUS_COLOR[node.status]}
+                strokeWidth="2"
                 rx="2"
               />
-              <text
-                x={node.x + node.width / 2}
-                y={node.y + node.height / 2 - 5}
-                fontSize="11"
-                fill="#F0EBE1"
-                textAnchor="middle"
-                className="font-display font-semibold"
-              >
+              <text x={node.x + node.width / 2} y={node.y + node.height / 2 - 6} fontSize="12" fill="#F0EBE1" textAnchor="middle" className="font-display font-semibold">
                 {node.label.split('\n')[0]}
               </text>
-              <text
-                x={node.x + node.width / 2}
-                y={node.y + node.height / 2 + 10}
-                fontSize="10"
-                fill="#F0EBE1"
-                textAnchor="middle"
-                className="font-data"
-              >
+              <text x={node.x + node.width / 2} y={node.y + node.height / 2 + 11} fontSize="10" fill="#F0EBE1" textAnchor="middle" className="font-data">
                 {node.label.split('\n')[1] || ''}
               </text>
             </g>
           ))}
         </svg>
       </div>
-      
-      {/* Legend */}
+
       <div className="mt-4 flex flex-wrap gap-4 text-[11px] font-data">
+        <span className="text-ink-300">Fill = layer</span>
         {Object.entries(CATEGORY_COLOR).map(([category, color]) => (
           <div key={category} className="flex items-center gap-1">
             <span className="w-3 h-3 inline-block" style={{ background: color }} />
             <span className="text-ink-200 capitalize">{category}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-4 text-[11px] font-data">
+        <span className="text-ink-300">Border = status</span>
+        {(Object.entries(STATUS_COLOR) as [Block["status"], string][]).map(([status, color]) => (
+          <div key={status} className="flex items-center gap-1">
+            <span className="w-3 h-3 inline-block border-2" style={{ borderColor: color, background: "transparent" }} />
+            <span className="text-ink-200 capitalize">{status}</span>
           </div>
         ))}
       </div>
@@ -207,14 +212,14 @@ const ROWS: Block[][] = [
   [
     {
       title: "apps/admin",
-      detail: "Vite + React + TypeScript + Tailwind + MapLibre GL. Operations dashboard.",
+      detail: "Vite + React + TypeScript + Tailwind + MapLibre GL. Risk map, dispatch, road/isolation search and blocking, citizen report review with photos, alert triggering - all against the real API, not fixtures.",
       status: "partial",
     },
   ],
   [
     {
       title: "services/api routers",
-      detail: "FastAPI: risk, requests, units, dispatch, benchmark, log. Requests/units wired to Supabase.",
+      detail: "FastAPI: risk, requests, units, dispatch, benchmark, log, roads, reports, alerts, insar, resources. All wired to Supabase and exercised end to end, not just present.",
       status: "partial",
     },
   ],
@@ -236,36 +241,36 @@ const ROWS: Block[][] = [
     },
     {
       title: "dispatch/severity.py",
-      detail: "Triage: people + category + area_risk + wait + isolation. Isolation term wired once roads/isolation.py exists.",
+      detail: "Triage: 0.28 people + 0.28 category + 0.22 area_risk + 0.12 wait + 0.10 isolation. Isolation term is wired and verified: an isolated settlement's request outranks an identical non-isolated one.",
       status: "done",
     },
   ],
   [
     {
       title: "insar/",
-      detail: "Deformation time series from Sentinel-1 SBAS. Pre-computed for demo corridor, served via API. Not live.",
-      status: "planned",
+      detail: "Deformation time series API, classified stable/creeping/accelerating. Sentinel-1 SLC never arrived in the build window, so this serves labelled SYNTHETIC - ILLUSTRATIVE ONLY data, not measured. The SBAS processing pipeline is real; only the input scene is not.",
+      status: "done",
     },
   ],
   [
     {
       title: "roads/isolation.py",
-      detail: "OSM graph, blockage-aware, connected components, settlement isolation. DB-backed, Realtime broadcast, block/clear endpoint.",
-      status: "planned",
+      detail: "Real OSM graph (4,629 segments, 52 settlements), blockage-aware, connected components recomputed live. Block/clear endpoints, plus search-by-settlement and report-driven blocking - not limited to one hardcoded road.",
+      status: "done",
     },
   ],
   [
     {
       title: "reports/",
-      detail: "Citizen submissions, clustering, on-device photo classification. PWA + Capacitor.",
-      status: "planned",
+      detail: "Citizen PWA submissions with photo attachments, offline queueing, location + time clustering. Reports render with photo thumbnails in the admin queue and can be approved into a real dispatch request.",
+      status: "done",
     },
   ],
   [
     {
       title: "alerts/",
-      detail: "CAP generation, geo-fenced, evaluated on-device. No SMS gateway integration.",
-      status: "planned",
+      detail: "Real CAP 1.2 XML generation, verified end to end. Geo-fenced evaluation is client-side ready. No SMS gateway integration - needs credentials and procurement, not engineering.",
+      status: "done",
     },
   ],
   [
@@ -285,15 +290,15 @@ const ROWS: Block[][] = [
   [
     {
       title: "risk/model.py (LightGBM)",
-      detail: "Training pipeline built and tested. 69 positive samples below threshold for spatial cross-validation. Needs inventory data.",
+      detail: "Training pipeline built and tested. 58 positive samples below the 150 threshold for spatial cross-validation. Needs GSI inventory data, not code.",
       status: "planned",
     },
   ],
   [
     {
       title: "Supabase (Postgres + PostGIS)",
-      detail: "Schema applied and live. Realtime configured. Routers read/write it.",
-      status: "partial",
+      detail: "Schema applied and live across every table used above - roads, settlements, reports, alerts, requests, units, dispatch log. RLS policies and a live schema audit (several tables had drifted from schema.sql or had no access policy at all) were both real bugs found and fixed this build.",
+      status: "done",
     },
   ],
 ]

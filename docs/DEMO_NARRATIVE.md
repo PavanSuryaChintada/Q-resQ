@@ -64,7 +64,7 @@ TERRAIN → SUSCEPTIBILITY → ROADS → TRIAGE → DISPATCH
 | **Terrain** | Copernicus DEM 30 m → 100 m grid | slope, aspect (sin/cos), plan and profile curvature, LS, HAND, TWI, distance to stream, **distance to road cut** |
 | **Susceptibility** | Physical index today; LightGBM pipeline built and awaiting inventory | 0–1 per cell, banded to the IMD warning ladder, provenance-labelled |
 | **Deformation** | Sentinel-1 InSAR, SBAS, pre-computed | line-of-sight velocity, acceleration, alert state |
-| **Roads** | OSM graph, blockage-aware | passability, connected components, settlement isolation |
+| **Roads** | OSM graph, blockage-aware, any segment can be blocked | passability, connected components, settlement isolation |
 | **Triage** | Weighted score, all components stored | severity with an explicit isolation term |
 | **Dispatch** | QUBO formulation | allocation of response units |
 
@@ -111,6 +111,8 @@ Blocked segments are removed from the graph and connected components recomputed.
 
 Blockage has three sources — predicted, reported, confirmed — and the source is shown. An officer must know whether a road is actually blocked or only modelled as likely.
 
+Blocking is not limited to one hardcoded demo road. An officer can search any of the 52 settlements, find the real nearest road segment, and block or clear it directly — or approve a citizen's "road blocked" report, which finds and blocks the real segment near that report's location automatically. NH6 is the rehearsed example, not the only path.
+
 ### 6 — Triage
 ```
 σ = 0.28·persons + 0.28·category + 0.22·area_risk + 0.12·wait + 0.10·isolation
@@ -133,7 +135,7 @@ A citizen report of a blocked road updates the graph. The graph changes isolatio
 |---|---|---|
 | 0:00 | Risk map, Aizawl | "Aizawl. Built on cut slopes, on a ridge, in monsoon country. 284,000 cells at 100 metres." |
 | 0:30 | Click a cell | "Slope and curvature, yes — but look at cut-slope proximity. The brief names unplanned hill cutting. It's a first-class feature, and it flags 3.6 % of the district." |
-| 0:50 | Point at the provenance flag | "This cell says index, not model. We have 69 positive samples for this district — not enough to train something that survives spatial cross-validation. So we ship a transparent index and tell you it's an index. The training pipeline is built. It needs inventory, not code." |
+| 0:50 | Point at the provenance flag | "This cell says index, not model. We have 58 positive samples for this district — not enough to train something that survives spatial cross-validation. So we ship a transparent index and tell you it's an index. The training pipeline is built. It needs inventory, not code." |
 | 1:20 | Deformation corridor | "This is not susceptibility. This is measured ground movement from Sentinel-1 interferometry. This slope is moving." |
 | 1:50 | Point time series | "Steady creep is normal on a hillslope. Acceleration is not. That distinction is the early warning — and it's why we don't just flag everything that moves." |
 | 2:20 | Corridor boundary | "Outside this boundary the layer is empty. We processed one corridor. We don't interpolate across ground we didn't measure." |
@@ -159,7 +161,7 @@ Blocking NH6 and watching three named villages go isolated is the moment that sh
 > Satellite-derived today — SMAP and ERA5-Land. The sensor ingest contract is documented and the table exists. We did not simulate hardware we don't have.
 
 **"Why isn't susceptibility a trained model?"**
-> 69 positive samples for this district. With 5 spatial folds that's 14 per held-out fold, and any AUC we reported would be noise. The pipeline is built and tested. Give us the GSI field-validated inventory and it trains in minutes.
+> 58 positive samples for this district. With 5 spatial folds that's 14 per held-out fold, and any AUC we reported would be noise. The pipeline is built and tested. Give us the GSI field-validated inventory and it trains in minutes.
 
 **"How did you validate?"**
 > Spatial block cross-validation — 5 km blocks, 5 folds, blocks never split. Random k-fold on gridded terrain leaks neighbours between train and test and inflates the score badly. When we report a number it will come from spatial blocks.
@@ -169,3 +171,6 @@ Blocking NH6 and watching three named villages go isolated is the moment that sh
 
 **"What's the quantum part?"**
 > Response allocation is formulated as a QUBO. It runs on OR-Tools today; the formulation is hardware-ready for quantum backends. It's not in the critical path — the system runs with Qiskit uninstalled.
+
+**"Does blocking only work for NH6?"**
+> No — NH6 is the rehearsed example because we verified it's the single real edge that isolates three named villages. Any of the 52 settlements can be searched and its nearest road blocked directly, and a citizen's "road blocked" report finds and blocks the real segment automatically when an officer approves it.

@@ -21,7 +21,7 @@ const STEPS: Step[] = [
   },
   {
     title: "Provenance flag",
-    say: "This cell says index, not model. We have 69 positive samples for this district — not enough to train something that survives spatial cross-validation. The training pipeline is built. It needs inventory, not code.",
+    say: "This cell says index, not model. We have 58 positive samples for this district — not enough to train something that survives spatial cross-validation. The training pipeline is built. It needs inventory, not code.",
     doThis: "Point at the provenance field in the cell detail panel.",
   },
   {
@@ -42,12 +42,17 @@ const STEPS: Step[] = [
   {
     title: "Block NH6",
     say: "Now a landslide takes the highway. This is not hypothetical — NH6 is the Aizawl–Silchar route and it closes to landslides most monsoons.",
-    doThis: "Use the demo trigger to block NH6 (way/24583261).",
+    doThis: "Click Block NH6 in the isolation control (way/242679584, the real segment).",
   },
   {
     title: "Isolation view",
     say: "Lenchim. Tawizo. Mualpheng. Three villages, and there is no second route in the real road network. In a flood people self-evacuate. On a ridge, one road going removes the only option. That's a separate axis of urgency and it enters the priority score directly.",
     doThis: "Point at the isolation scores for the three settlements in the isolation view.",
+  },
+  {
+    title: "Not just NH6",
+    say: "NH6 is the rehearsed example because we verified it's the real edge that isolates three named villages. But blocking isn't hardcoded to one road — any settlement can be searched, its nearest real road found and blocked, and a citizen's road-blocked report does the same automatically once approved.",
+    doThis: "Search a settlement in Custom road block and show the nearest-road preview.",
   },
   {
     title: "Dispatch",

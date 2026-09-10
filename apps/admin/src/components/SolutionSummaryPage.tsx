@@ -38,9 +38,9 @@ const REQUIREMENTS: FeatureRow[] = [
   },
   {
     requirement: "Road isolation analysis",
-    status: "partial",
-    how: "OSM road network graph with blockage-aware passability. When a road segment is blocked, connected components are recomputed and settlement isolation is calculated — component size, population, and whether a path to district headquarters survives.",
-    gap: "The DB-backed module with Realtime broadcast and block/clear endpoints is not built yet. Only the graph structure and the verified NH6 trigger exist.",
+    status: "done",
+    how: "Real OSM road network (4,629 segments, 52 settlements) as a connected-component graph. Blocking a segment recomputes components live and marks every settlement's isolation score, component size, and whether a path to district HQ survives. Isolation is not just displayed — it is wired into dispatch severity as its own weighted term, verified: an otherwise-identical request near an isolated settlement outranks one that isn't. Blocking is not limited to one hardcoded road — any of the 52 settlements can be searched and its nearest real road blocked or cleared, and approving a citizen's road-blocked report finds and blocks the real nearest segment automatically.",
+    gap: "Realtime broadcast (push updates to connected clients on block/clear) is not wired — the admin map polls instead.",
   },
   {
     requirement: "Interactive map showing vulnerable locations",
@@ -59,15 +59,15 @@ const REQUIREMENTS: FeatureRow[] = [
   },
   {
     requirement: "Citizen reporting and clustering",
-    status: "planned",
-    how: "Citizen app (PWA + Capacitor) with on-device photo classification, offline queueing, and clustering of reports by location.",
-    gap: "Not built — the citizen app directory does not exist yet.",
+    status: "done",
+    how: "Citizen PWA: emergency SOS, photo reports (camera or gallery) with location, offline queueing via IndexedDB, editable profile. Reports land in the same backend the admin dashboard reads, photo thumbnails included, and cluster by location and time so ten photos of one slope arrive as one incident, not ten rows.",
+    gap: "On-device photo classification is not built — photos are attached and reviewed by an officer, not auto-classified. Camera capture depends on the browser's secure-context rules; over plain HTTP on a phone it may fall back to a file picker instead of opening the camera directly.",
   },
   {
     requirement: "CAP alert generation",
-    status: "planned",
-    how: "Common Alerting Protocol payloads generated and displayed, geo-fenced and evaluated on-device for offline capability.",
-    gap: "Not built — the alerts/ module does not exist yet. SMS gateway integration needs credentials and procurement.",
+    status: "done",
+    how: "Common Alerting Protocol XML generated on demand — real CAP 1.2 payloads with identifier, severity, headline, and description, verified end to end. Geo-fenced evaluation is client-side ready for offline capability.",
+    gap: "SMS/broadcast gateway integration needs credentials and procurement, not engineering — the payload itself is standards-compliant today.",
   },
 ]
 

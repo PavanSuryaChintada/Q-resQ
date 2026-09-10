@@ -83,7 +83,8 @@ const FLOW_STEPS: FlowStep[] = [
       "Connected components recomputed",
       "For each settlement: component size, population, path to district headquarters",
       "No path to HQ = isolation score 1.0",
-      "Blockage source shown (predicted vs reported vs confirmed)"
+      "Blockage source shown (predicted vs reported vs confirmed)",
+      "Not limited to one hardcoded road: search any settlement and block its real nearest segment, or approve a citizen's road-blocked report to block automatically"
     ],
     input: ["OSM road network", "Blockage reports"],
     output: "Settlement isolation scores"
@@ -250,8 +251,8 @@ export function FlowPage() {
         <div className="mt-6 p-4 border border-ground-300 bg-ground-100">
           <h3 className="font-display font-semibold text-[13px] text-ink-000 mb-2">Key insight</h3>
           <p className="text-[12px] text-ink-200 leading-relaxed">
-            The pipeline loops back: as flood conditions change, road passability updates, which changes travel costs, 
-            requiring re-optimization. This is why the dispatch engine exists — static planning fails when the terrain itself is dynamic.
+            The pipeline loops back: as roads get blocked, passability updates, which changes travel costs and isolation scores,
+            requiring re-optimization. This is why the dispatch engine exists — static planning fails when the road network itself is dynamic.
           </p>
         </div>
       </div>
