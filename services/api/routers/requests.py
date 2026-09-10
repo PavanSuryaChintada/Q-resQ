@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException
 from dispatch.severity import compute_severity
 from models import RequestCreate, RequestOut, RequestPatch
 from risk.features import nearest_risk_score
+from roads.isolation import nearest_isolation_score
 from routers import log as log_router
 
 router = APIRouter()
@@ -39,6 +40,7 @@ def _recompute_open_severity() -> None:
 
     for request in open_requests:
         area_risk = nearest_risk_score(request.location[0], request.location[1])
+        isolation = nearest_isolation_score(request.location[0], request.location[1])
         result = compute_severity(
             people_count=request.people_count,
             category=request.category,
@@ -46,6 +48,7 @@ def _recompute_open_severity() -> None:
             wait_minutes=waits[request.id],
             max_people_in_queue=max_people,
             max_wait_minutes_in_queue=max_wait,
+            isolation=isolation,
         )
         _store[request.id] = request.model_copy(update={
             "severity": result["severity"],
@@ -53,6 +56,7 @@ def _recompute_open_severity() -> None:
             "sev_category": result["sev_category"],
             "sev_area_risk": result["sev_area_risk"],
             "sev_wait": result["sev_wait"],
+            "sev_isolation": result["sev_isolation"],
         })
 
 
@@ -66,6 +70,7 @@ def _upsert(payload: RequestCreate) -> RequestOut:
         sev_category=existing.sev_category if existing else None,
         sev_area_risk=existing.sev_area_risk if existing else None,
         sev_wait=existing.sev_wait if existing else None,
+        sev_isolation=existing.sev_isolation if existing else None,
         synced_at=datetime.now(timezone.utc),
         resolved_at=existing.resolved_at if existing else None,
     )

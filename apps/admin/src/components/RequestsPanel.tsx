@@ -121,6 +121,7 @@ export function RequestsPanel({ center, onSwitchView, onRequestSelect, selectedR
               <th className="text-left px-2 py-1 font-normal">Sev</th>
               <th className="text-left px-2 py-1 font-normal">People</th>
               <th className="text-left px-2 py-1 font-normal">Category</th>
+              <th className="text-left px-2 py-1 font-normal" title="Cut off from HQ by a blocked road">Iso</th>
               <th className="text-left px-2 py-1 font-normal">Status</th>
               <th className="text-left px-2 py-1 font-normal">Note</th>
             </tr>
@@ -128,7 +129,7 @@ export function RequestsPanel({ center, onSwitchView, onRequestSelect, selectedR
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-2 py-4 text-ink-300 text-center">
+                <td colSpan={6} className="px-2 py-4 text-ink-300 text-center">
                   {query ? "No requests match that search." : "No open requests. Requests appear here as they arrive."}
                 </td>
               </tr>
@@ -149,6 +150,9 @@ export function RequestsPanel({ center, onSwitchView, onRequestSelect, selectedR
                   <td className="px-2 py-1 font-data">{(r.severity ?? 0).toFixed(2)}</td>
                   <td className="px-2 py-1 font-data">{r.people_count}</td>
                   <td className="px-2 py-1">{r.category}</td>
+                  <td className="px-2 py-1">
+                    {r.sev_isolation ? <span className="w-2 h-2 inline-block bg-sev-3" title="Isolated settlement" /> : ""}
+                  </td>
                   <td className="px-2 py-1 text-ink-200">{r.status}</td>
                   <td className="px-2 py-1 text-ink-200">{r.note ?? ""}</td>
                 </tr>

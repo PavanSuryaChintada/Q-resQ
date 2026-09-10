@@ -110,3 +110,7 @@ export function useClearRoadSegment() {
     },
   })
 }
+
+export function useCreateAlert() {
+  return useMutation({ mutationFn: api.createAlert })
+}

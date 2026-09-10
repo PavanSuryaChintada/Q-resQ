@@ -15,10 +15,10 @@ import { RiskCellPanel } from "./components/RiskCellPanel"
 import { SolutionSummaryPage } from "./components/SolutionSummaryPage"
 import { UnitsPanel } from "./components/UnitsPanel"
 import {
-  useAssignments, useBlockDemoTrigger, useClearRoadSegment, useIsolation,
-  useReports, useRequests, useRiskCells, useUnits,
+  useAssignments, useBlockDemoTrigger, useClearRoadSegment, useCreateAlert,
+  useCreateRequest, useIsolation, useReports, useRequests, useRiskCells, useUnits,
 } from "./lib/hooks"
-import type { RoadGeometry } from "./lib/api"
+import type { AlertOut, RoadGeometry } from "./lib/api"
 
 // Aizawl district HQ - see services/api/config.py:REGION["hq"]
 const DEMO_CENTER: [number, number] = [23.7271, 92.7176]
@@ -34,7 +34,7 @@ export default function App() {
   const [showReports, setShowReports] = useState(false)
   const [blockedSegmentId, setBlockedSegmentId] = useState<number | null>(null)
   const [blockedRoadGeom, setBlockedRoadGeom] = useState<RoadGeometry | null>(null)
-  const [dispatchFlow, setDispatchFlow] = useState<{ settlement: string; status: string } | null>(null)
+  const [dispatchFlow, setDispatchFlow] = useState<{ settlement: string; alert: AlertOut | null; requestCreated: boolean } | null>(null)
   const { data: riskCells } = useRiskCells()
   const { data: units } = useUnits()
   const { data: requests } = useRequests()
@@ -43,6 +43,8 @@ export default function App() {
   const { data: isolation } = useIsolation()
   const blockDemoTrigger = useBlockDemoTrigger()
   const clearRoadSegment = useClearRoadSegment()
+  const createAlert = useCreateAlert()
+  const createRequest = useCreateRequest()
 
   const isolatedSettlements = (isolation ?? []).filter((s) => s.isolated)
   const isBlocked = blockedSegmentId !== null
@@ -91,8 +93,15 @@ export default function App() {
               onClearNH6={handleClearNH6}
               isolatedSettlements={isolatedSettlements.map((s) => s.name)}
               isBlocked={isBlocked}
-              onTriggerAlert={(settlement) => {
-                setDispatchFlow({ settlement, status: "alerting" })
+              onTriggerAlert={async (settlement) => {
+                setDispatchFlow({ settlement, alert: null, requestCreated: false })
+                const alert = await createAlert.mutateAsync({
+                  severity: 4,
+                  headline: `Landslide isolates ${settlement}`,
+                  area_name: settlement,
+                  trigger_src: "manual",
+                })
+                setDispatchFlow({ settlement, alert, requestCreated: false })
               }}
             />
           </div>
@@ -182,51 +191,62 @@ export default function App() {
                 <div className="p-3 border border-ground-300 bg-ground-100">
                   <div className="text-[11px] text-ink-200 mb-1">Alert status</div>
                   <div className="text-[12px] text-ink-000 font-body">
-                    {dispatchFlow.status === "alerting" ? "Triggering CAP alert..." : "Dispatch in progress"}
+                    {dispatchFlow.alert ? "CAP alert issued" : "Generating CAP alert..."}
                   </div>
                 </div>
 
-                <div className="p-3 border border-ground-300 bg-ground-100">
-                  <div className="text-[11px] text-ink-200 mb-1">Settlement</div>
-                  <div className="text-[12px] text-ink-000 font-body">{dispatchFlow.settlement}</div>
-                  <div className="font-data text-[11px] text-ink-300 mt-1">23.73, 92.72</div>
-                </div>
+                {(() => {
+                  const settlement = isolatedSettlements.find((s) => s.name === dispatchFlow.settlement)
+                  return (
+                    <div className="p-3 border-l-2 border-l-sev-3 border-t border-r border-b border-ground-300 bg-ground-100">
+                      <div className="text-[11px] text-ink-200 mb-1">Settlement</div>
+                      <div className="text-[12px] text-ink-000 font-body">{dispatchFlow.settlement}</div>
+                      {settlement?.lon != null && settlement?.lat != null && (
+                        <div className="font-data text-[11px] text-ink-300 mt-1">
+                          {settlement.lat.toFixed(4)}, {settlement.lon.toFixed(4)}
+                        </div>
+                      )}
+                      {settlement?.population != null && (
+                        <div className="text-[11px] text-ink-300">Population: {settlement.population}</div>
+                      )}
+                      <div className="text-[12px] text-sev-3 mt-1">No path to district HQ</div>
+                    </div>
+                  )
+                })()}
 
-                <div className="p-3 border border-ground-300 bg-ground-100">
-                  <div className="text-[11px] text-ink-200 mb-1">Assigned resources</div>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[12px] text-ink-000">Rescue team</span>
-                      <span className="text-[11px] text-state-ok font-data">Dispatched</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[12px] text-ink-000">Truck</span>
-                      <span className="text-[11px] text-state-ok font-data">Dispatched</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[12px] text-ink-000">Medical</span>
-                      <span className="text-[11px] text-state-warn font-data">Standby</span>
+                {dispatchFlow.alert && (
+                  <div className="p-3 border border-ground-300 bg-ground-100">
+                    <div className="text-[11px] text-ink-200 mb-1">{dispatchFlow.alert.headline}</div>
+                    <div className="text-[12px] text-ink-000">{dispatchFlow.alert.description}</div>
+                    <div className="text-[11px] text-ink-300 mt-1">
+                      CAP · {dispatchFlow.alert.languages.join(", ")} · expires{" "}
+                      {new Date(dispatchFlow.alert.expires_at).toLocaleString()}
                     </div>
                   </div>
-                </div>
-
-                <div className="p-3 border border-ground-300 bg-ground-100">
-                  <div className="text-[11px] text-ink-200 mb-1">Road route</div>
-                  <div className="text-[12px] text-ink-000">NH6 → Tlawng Road → Settlement</div>
-                  <div className="font-data text-[11px] text-ink-300 mt-1">12.4 km · ETA 35 min</div>
-                </div>
-
-                <div className="p-3 border-l-2 border-l-sev-3 border-t border-r border-b border-ground-300 bg-ground-100">
-                  <div className="text-[11px] text-ink-200 mb-1">Isolation status</div>
-                  <div className="text-[12px] text-sev-3">Critical — no alternate route</div>
-                  <div className="text-[11px] text-ink-300 mt-1">Only road: NH6 (blocked)</div>
-                </div>
+                )}
 
                 <button
-                  onClick={() => setDispatchFlow({ ...dispatchFlow, status: "dispatched" })}
-                  className="w-full h-8 border border-ground-400 bg-ground-300 text-ink-000 text-[12px] font-display uppercase tracking-wide hover:bg-ground-400"
+                  onClick={async () => {
+                    const settlement = isolatedSettlements.find((s) => s.name === dispatchFlow.settlement)
+                    if (!settlement?.lon || !settlement?.lat) return
+                    await createRequest.mutateAsync({
+                      id: crypto.randomUUID(),
+                      location: [settlement.lat, settlement.lon],
+                      people_count: settlement.population ? Math.min(settlement.population, 50) : 5,
+                      category: "evacuation",
+                      note: `Isolated settlement - no path to HQ (${dispatchFlow.settlement})`,
+                      created_at: new Date().toISOString(),
+                    })
+                    setDispatchFlow({ ...dispatchFlow, requestCreated: true })
+                  }}
+                  disabled={createRequest.isPending || dispatchFlow.requestCreated}
+                  className="w-full h-8 border border-ground-400 bg-ground-300 text-ink-000 text-[12px] font-display uppercase tracking-wide hover:bg-ground-400 disabled:opacity-50"
                 >
-                  Approve dispatch
+                  {dispatchFlow.requestCreated
+                    ? "Rescue request created - see queue"
+                    : createRequest.isPending
+                    ? "Creating request..."
+                    : "Create rescue request here"}
                 </button>
               </div>
             </div>

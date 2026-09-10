@@ -188,6 +188,7 @@ create table if not exists alerts (
   cap_xml     text not null,
   severity    smallint check (severity between 0 and 4),
   headline    text,
+  description text,
   geofence    geometry(Polygon, 4326),
   languages   text[],
   trigger_src text check (trigger_src in

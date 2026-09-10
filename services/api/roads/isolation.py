@@ -19,10 +19,50 @@ from typing import Any
 
 import networkx as nx
 from shapely.geometry import LineString, Point
+from supabase import Client, create_client
 
 from config import REGION
 
 _API_DIR = Path(__file__).resolve().parents[1]
+
+_supabase: Client | None = None
+
+
+def _get_supabase() -> Client:
+    global _supabase
+    if _supabase is None:
+        _supabase = create_client(
+            "https://bsftkkpdtsqcblnmwbfd.supabase.co",
+            "sb_publishable_urAbb_UvLdvF2ORY5PC6_w_XZGT9-7O",
+        )
+    return _supabase
+
+
+def nearest_isolation_score(lat: float, lon: float) -> float:
+    """sev_isolation input for dispatch/severity.py: the nearest
+    settlement's last-computed isolation_score.
+
+    Reads settlements.isolation_score directly rather than recomputing
+    the whole road graph on every severity refresh - that column is
+    kept current by routers/roads.py's get_isolation(), which runs on
+    every block/clear/isolation-view request, so this is a cheap read
+    of an already-fresh value, not a stale cache.
+
+    Severity must never fail a request intake over a Supabase hiccup -
+    same fallback-to-neutral contract as nearest_risk_score.
+    """
+    try:
+        result = _get_supabase().table("settlements").select("geom,isolation_score").execute()
+    except Exception:
+        return 0.0
+    settlements = [s for s in result.data if s.get("geom")]
+    if not settlements:
+        return 0.0
+    best = min(
+        settlements,
+        key=lambda s: (s["geom"]["coordinates"][0] - lon) ** 2 + (s["geom"]["coordinates"][1] - lat) ** 2,
+    )
+    return float(best.get("isolation_score") or 0.0)
 
 
 @dataclass

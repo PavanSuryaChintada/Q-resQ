@@ -192,6 +192,9 @@ export function RequestCarousel({ requests, units, onRequestSelect, selectedRequ
             <div>Category: {currentRequest.sev_category?.toFixed(3) || "N/A"}</div>
             <div>Area risk: {currentRequest.sev_area_risk?.toFixed(3) || "N/A"}</div>
             <div>Wait time: {currentRequest.sev_wait?.toFixed(3) || "N/A"}</div>
+            <div className={currentRequest.sev_isolation ? "text-sev-3" : ""}>
+              Isolation: {currentRequest.sev_isolation?.toFixed(3) || "0.000"}
+            </div>
           </div>
         </div>
       </div>

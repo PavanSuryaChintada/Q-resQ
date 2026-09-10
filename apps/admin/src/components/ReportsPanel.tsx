@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useReports } from "../lib/hooks"
+import { useCreateRequest, useReports } from "../lib/hooks"
 import { api } from "../lib/api"
 
 const STATUS_COLOR: Record<string, string> = {
@@ -17,6 +17,17 @@ const KIND_COLOR: Record<string, string> = {
   other: "#6B6862",
 }
 
+// Approving a report creates a real dispatch request at the reported
+// location - people_count is a placeholder (a photo report carries no
+// headcount) that the officer is expected to correct once assessed.
+const REPORT_KIND_TO_CATEGORY: Record<string, "medical" | "stranded" | "evacuation"> = {
+  crack: "evacuation",
+  slope_movement: "evacuation",
+  road_blocked: "stranded",
+  water_seepage: "stranded",
+  other: "stranded",
+}
+
 interface Props {
   onReportSelect: (reportId: string) => void
   selectedReportId: string | null
@@ -24,6 +35,7 @@ interface Props {
 
 export function ReportsPanel({ onReportSelect, selectedReportId }: Props) {
   const { data: reports } = useReports()
+  const createRequest = useCreateRequest()
   const [reviewing, setReviewing] = useState<string | null>(null)
   const [filter, setFilter] = useState<"all" | "pending" | "verified" | "dismissed">("pending")
 
@@ -38,14 +50,17 @@ export function ReportsPanel({ onReportSelect, selectedReportId }: Props) {
   }
 
   const handleApprove = async (reportId: string) => {
-    // Verify and create emergency request from report
     const report = reports?.find(r => r.id === reportId)
-    if (report) {
-      // This would call the allocation endpoint
-      console.log("Approving report:", reportId, "creating emergency request at", report.location)
-      // For now, just verify
-      await handleStatusChange(reportId, "verified")
-    }
+    if (!report) return
+    await createRequest.mutateAsync({
+      id: crypto.randomUUID(),
+      location: report.location,
+      people_count: 1,
+      category: REPORT_KIND_TO_CATEGORY[report.kind] ?? "stranded",
+      note: `From citizen report: ${report.kind.replace("_", " ")}${report.note ? ` - ${report.note}` : ""}`,
+      created_at: new Date().toISOString(),
+    })
+    await handleStatusChange(reportId, "verified")
   }
 
   const filtered = filter === "all"
@@ -95,13 +110,10 @@ export function ReportsPanel({ onReportSelect, selectedReportId }: Props) {
               >
                 <div className="px-3 py-2">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3"
-                        style={{ backgroundColor: KIND_COLOR[r.kind] || "#6B6862" }}
-                      />
-                      <span className="text-sm font-body text-ink-000">{r.kind}</span>
-                    </div>
+                    <div
+                      className="w-3 h-3 shrink-0"
+                      style={{ backgroundColor: KIND_COLOR[r.kind] || "#6B6862" }}
+                    />
                     <span className="text-[13px] font-medium capitalize">{r.kind.replace("_", " ")}</span>
                     <span className="ml-auto text-[11px] text-ink-300 font-data">
                       {new Date(r.created_at).toLocaleTimeString()}
@@ -110,6 +122,13 @@ export function ReportsPanel({ onReportSelect, selectedReportId }: Props) {
                   <div className="text-[12px] text-ink-200 mb-1">
                     {r.note || "No note provided"}
                   </div>
+                  {r.media_url && r.media_type === "image" && (
+                    <img
+                      src={r.media_url}
+                      alt={`${r.kind} report photo`}
+                      className="w-full max-h-32 object-cover border border-ground-300 mb-1"
+                    />
+                  )}
                   <div className="flex items-center gap-2 text-[11px] text-ink-300">
                     <span className="font-data">
                       {r.location[0].toFixed(4)}, {r.location[1].toFixed(4)}

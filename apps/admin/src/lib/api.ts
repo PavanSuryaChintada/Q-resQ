@@ -51,6 +51,7 @@ export interface RequestOut {
   sev_category?: number | null
   sev_area_risk?: number | null
   sev_wait?: number | null
+  sev_isolation?: number | null
 }
 
 export interface ReportOut {
@@ -58,6 +59,8 @@ export interface ReportOut {
   location: [number, number]
   kind: "crack" | "slope_movement" | "road_blocked" | "water_seepage" | "other"
   note: string | null
+  media_url: string | null
+  media_type: "image" | "video" | null
   status: "pending" | "verified" | "dismissed" | "duplicate"
   created_at: string
   reporter_hash: string
@@ -140,6 +143,18 @@ export interface DemoTriggerOut {
 export interface RoadGeometry {
   type: "LineString"
   coordinates: [number, number][]
+}
+
+export interface AlertOut {
+  id: string
+  cap_xml: string
+  severity: number
+  headline: string
+  description: string
+  trigger_src: string
+  languages: string[]
+  issued_at: string
+  expires_at: string
 }
 
 export interface RoadBlockResult {
@@ -225,4 +240,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ segment_id: segmentId }),
     }),
+
+  createAlert: (payload: {
+    severity: number
+    headline: string
+    area_name: string
+    trigger_src: "risk_band" | "deformation" | "report" | "manual"
+    language?: string
+  }) => request<AlertOut>("/alerts/", { method: "POST", body: JSON.stringify(payload) }),
 }

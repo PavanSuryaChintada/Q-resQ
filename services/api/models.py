@@ -88,6 +88,7 @@ class RequestOut(RequestCreate):
     sev_category: float | None = None
     sev_area_risk: float | None = None
     sev_wait: float | None = None
+    sev_isolation: float | None = None
     synced_at: datetime | None = None
     resolved_at: datetime | None = None
 
