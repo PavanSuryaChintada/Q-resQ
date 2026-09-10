@@ -114,3 +114,24 @@ export function useClearRoadSegment() {
 export function useCreateAlert() {
   return useMutation({ mutationFn: api.createAlert })
 }
+
+export function useBlockedSegments() {
+  return useQuery({ queryKey: ["blocked-segments"], queryFn: api.blockedSegments, refetchInterval: 5000 })
+}
+
+export function useNearestSegment() {
+  return useMutation({ mutationFn: ({ lat, lon }: { lat: number; lon: number }) => api.nearestSegment(lat, lon) })
+}
+
+export function useBlockSegment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ segmentId, reason }: { segmentId: number; reason: "predicted" | "reported" | "confirmed" }) =>
+      api.blockSegment(segmentId, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["isolation"] })
+      qc.invalidateQueries({ queryKey: ["blocked-segments"] })
+      qc.invalidateQueries({ queryKey: ["log"] })
+    },
+  })
+}

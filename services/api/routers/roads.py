@@ -43,6 +43,55 @@ class ClearSegmentRequest(BaseModel):
     segment_id: int
 
 
+@router.get("/blocked")
+async def list_blocked_segments() -> list[dict]:
+    """All currently-blocked road segments, for the map to render every
+    real blockage - not just whichever one the NH6 demo trigger set.
+    """
+    result = supabase.table("road_segments").select("*").eq("blocked", True).execute()
+    return [
+        {
+            "id": seg["id"],
+            "osm_id": seg.get("osm_id"),
+            "road_class": seg.get("road_class"),
+            "geom": seg.get("geom"),
+            "block_reason": seg.get("block_reason"),
+            "blocked_since": seg.get("blocked_since"),
+        }
+        for seg in result.data
+    ]
+
+
+@router.get("/nearest")
+async def nearest_segment(lat: float, lon: float) -> dict:
+    """The road segment nearest a point - for "block the road near this
+    citizen report" or "search a settlement, block its access road"
+    flows, where the officer has a location but not a segment id.
+
+    Distance is to the segment's nearest vertex, not a true point-to-
+    line distance - close enough to pick the right segment at road scale,
+    not routing-grade.
+    """
+    result = supabase.table("road_segments").select("*").execute()
+    segments = [s for s in result.data if s.get("geom")]
+    if not segments:
+        raise HTTPException(status_code=404, detail="no road segments in the database")
+
+    def min_dist_sq(seg: dict) -> float:
+        return min((c[0] - lon) ** 2 + (c[1] - lat) ** 2 for c in seg["geom"]["coordinates"])
+
+    best = min(segments, key=min_dist_sq)
+    return {
+        "id": best["id"],
+        "osm_id": best.get("osm_id"),
+        "road_class": best.get("road_class"),
+        "geom": best.get("geom"),
+        "blocked": best.get("blocked", False),
+        "block_reason": best.get("block_reason"),
+        "distance_m": (min_dist_sq(best) ** 0.5) * 111_320,  # rough deg->m at this latitude
+    }
+
+
 @router.get("/isolation")
 async def get_isolation() -> list[dict]:
     """Get current isolation state for all settlements."""

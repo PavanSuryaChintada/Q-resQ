@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useCreateRequest, useReports } from "../lib/hooks"
+import { useBlockSegment, useCreateRequest, useNearestSegment, useReports } from "../lib/hooks"
 import { api } from "../lib/api"
 
 const STATUS_COLOR: Record<string, string> = {
@@ -36,8 +36,26 @@ interface Props {
 export function ReportsPanel({ onReportSelect, selectedReportId }: Props) {
   const { data: reports } = useReports()
   const createRequest = useCreateRequest()
+  const nearestSegment = useNearestSegment()
+  const blockSegment = useBlockSegment()
   const [reviewing, setReviewing] = useState<string | null>(null)
+  const [blockingReportId, setBlockingReportId] = useState<string | null>(null)
   const [filter, setFilter] = useState<"all" | "pending" | "verified" | "dismissed">("pending")
+
+  const handleBlockRoad = async (reportId: string) => {
+    const report = reports?.find((r) => r.id === reportId)
+    if (!report) return
+    setBlockingReportId(reportId)
+    try {
+      const segment = await nearestSegment.mutateAsync({ lat: report.location[0], lon: report.location[1] })
+      if (!segment.blocked) {
+        await blockSegment.mutateAsync({ segmentId: segment.id, reason: "reported" })
+      }
+      await handleStatusChange(reportId, "verified")
+    } finally {
+      setBlockingReportId(null)
+    }
+  }
 
   const handleStatusChange = async (reportId: string, newStatus: string) => {
     try {
@@ -139,6 +157,18 @@ export function ReportsPanel({ onReportSelect, selectedReportId }: Props) {
 
                   {isReviewing && r.status === "pending" && (
                     <div className="mt-2 pt-2 border-t border-ground-300">
+                      {r.kind === "road_blocked" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleBlockRoad(r.id)
+                          }}
+                          disabled={blockingReportId === r.id}
+                          className="w-full mb-2 px-2 py-1 border border-sev-3 text-sev-3 text-[11px] hover:bg-ground-200 disabled:opacity-50"
+                        >
+                          {blockingReportId === r.id ? "Finding + blocking nearest road..." : "Block nearest road (reported)"}
+                        </button>
+                      )}
                       <div className="flex gap-2">
                         <button
                           onClick={(e) => {

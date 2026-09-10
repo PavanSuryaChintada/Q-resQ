@@ -166,6 +166,25 @@ export interface RoadBlockResult {
   message: string
 }
 
+export interface BlockedSegmentOut {
+  id: number
+  osm_id: number | null
+  road_class: string | null
+  geom: RoadGeometry
+  block_reason: string | null
+  blocked_since: string | null
+}
+
+export interface NearestSegmentOut {
+  id: number
+  osm_id: number | null
+  road_class: string | null
+  geom: RoadGeometry
+  blocked: boolean
+  block_reason: string | null
+  distance_m: number
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -235,6 +254,14 @@ export const api = {
   isolation: () => request<SettlementIsolationOut[]>("/roads/isolation"),
   demoTrigger: () => request<DemoTriggerOut>("/roads/demo/trigger"),
   blockDemoTrigger: () => request<RoadBlockResult>("/roads/demo/block", { method: "POST" }),
+  blockedSegments: () => request<BlockedSegmentOut[]>("/roads/blocked"),
+  nearestSegment: (lat: number, lon: number) =>
+    request<NearestSegmentOut>(`/roads/nearest?lat=${lat}&lon=${lon}`),
+  blockSegment: (segmentId: number, reason: "predicted" | "reported" | "confirmed") =>
+    request<{ segment_id: number; blocked: boolean; geom: RoadGeometry | null }>("/roads/block", {
+      method: "POST",
+      body: JSON.stringify({ segment_id: segmentId, block_reason: reason }),
+    }),
   clearRoadSegment: (segmentId: number) =>
     request<{ segment_id: number; blocked: boolean }>("/roads/clear", {
       method: "POST",

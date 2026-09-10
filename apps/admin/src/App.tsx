@@ -12,13 +12,14 @@ import { RequestCarousel } from "./components/RequestCarousel"
 import { RequestsPanel } from "./components/RequestsPanel"
 import { ReportsPanel } from "./components/ReportsPanel"
 import { RiskCellPanel } from "./components/RiskCellPanel"
+import { RoadBlockSearch } from "./components/RoadBlockSearch"
 import { SolutionSummaryPage } from "./components/SolutionSummaryPage"
 import { UnitsPanel } from "./components/UnitsPanel"
 import {
-  useAssignments, useBlockDemoTrigger, useClearRoadSegment, useCreateAlert,
-  useCreateRequest, useIsolation, useReports, useRequests, useRiskCells, useUnits,
+  useAssignments, useBlockDemoTrigger, useBlockedSegments, useClearRoadSegment,
+  useCreateAlert, useCreateRequest, useIsolation, useReports, useRequests, useRiskCells, useUnits,
 } from "./lib/hooks"
-import type { AlertOut, RoadGeometry } from "./lib/api"
+import type { AlertOut } from "./lib/api"
 
 // Aizawl district HQ - see services/api/config.py:REGION["hq"]
 const DEMO_CENTER: [number, number] = [23.7271, 92.7176]
@@ -33,7 +34,6 @@ export default function App() {
   const [showGuide, setShowGuide] = useState(false)
   const [showReports, setShowReports] = useState(false)
   const [blockedSegmentId, setBlockedSegmentId] = useState<number | null>(null)
-  const [blockedRoadGeom, setBlockedRoadGeom] = useState<RoadGeometry | null>(null)
   const [dispatchFlow, setDispatchFlow] = useState<{ settlement: string; alert: AlertOut | null; requestCreated: boolean } | null>(null)
   const { data: riskCells } = useRiskCells()
   const { data: units } = useUnits()
@@ -41,6 +41,7 @@ export default function App() {
   const { data: assignments } = useAssignments()
   const { data: reports } = useReports()
   const { data: isolation } = useIsolation()
+  const { data: blockedSegments } = useBlockedSegments()
   const blockDemoTrigger = useBlockDemoTrigger()
   const clearRoadSegment = useClearRoadSegment()
   const createAlert = useCreateAlert()
@@ -52,7 +53,6 @@ export default function App() {
   const handleBlockNH6 = async () => {
     const result = await blockDemoTrigger.mutateAsync()
     setBlockedSegmentId(result.segment_id)
-    setBlockedRoadGeom(result.geom)
   }
 
   const handleClearNH6 = async () => {
@@ -60,7 +60,6 @@ export default function App() {
       await clearRoadSegment.mutateAsync(blockedSegmentId)
     }
     setBlockedSegmentId(null)
-    setBlockedRoadGeom(null)
   }
 
   return (
@@ -104,6 +103,7 @@ export default function App() {
                 setDispatchFlow({ settlement, alert, requestCreated: false })
               }}
             />
+            <RoadBlockSearch settlements={isolation ?? []} />
           </div>
           <div className="flex-1 flex flex-col min-w-0">
             <div className="flex-1 min-h-0 relative">
@@ -119,7 +119,7 @@ export default function App() {
                 selectedRequestId={selectedRequestId}
                 selectedReportId={selectedReportId}
                 reports={showReports ? reports : undefined}
-                blockedRoadGeom={blockedRoadGeom}
+                blockedRoads={(blockedSegments ?? []).map((s) => s.geom)}
                 isolatedSettlements={isolatedSettlements.map((s) => ({
                   name: s.name, lon: s.lon ?? 0, lat: s.lat ?? 0,
                 }))}

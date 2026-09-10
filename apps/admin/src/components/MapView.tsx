@@ -63,7 +63,7 @@ interface Props {
     kind: string
     status: string
   }>
-  blockedRoadGeom?: { type: "LineString"; coordinates: [number, number][] } | null
+  blockedRoads?: Array<{ type: "LineString"; coordinates: [number, number][] }>
   isolatedSettlements?: Array<{ name: string; lon: number; lat: number }>
 }
 
@@ -78,7 +78,7 @@ interface Props {
 export function MapView({
   riskCells, units, requests, assignments, center, onSelectCell,
   showRoutes = true, selectedRequestId, selectedReportId, reports,
-  blockedRoadGeom, isolatedSettlements,
+  blockedRoads, isolatedSettlements,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
@@ -472,10 +472,10 @@ export function MapView({
     if (!map || !ready) return
 
     const roadSrc = map.getSource<GeoJSONSource>("blocked-road")
-    if (blockedRoadGeom) {
+    if (blockedRoads && blockedRoads.length > 0) {
       roadSrc?.setData({
         type: "FeatureCollection",
-        features: [{ type: "Feature", geometry: blockedRoadGeom, properties: {} }],
+        features: blockedRoads.map((geom) => ({ type: "Feature" as const, geometry: geom, properties: {} })),
       })
     } else {
       roadSrc?.setData(EMPTY_FC)
@@ -491,13 +491,11 @@ export function MapView({
           properties: { name: s.name },
         })),
       })
-      const midpoint = blockedRoadGeom?.coordinates[Math.floor(blockedRoadGeom.coordinates.length / 2)]
-      const flyTarget = midpoint ?? [isolatedSettlements[0].lon, isolatedSettlements[0].lat]
-      map.flyTo({ center: flyTarget as [number, number], zoom: 12, duration: 1000 })
+      map.flyTo({ center: [isolatedSettlements[0].lon, isolatedSettlements[0].lat], zoom: 12, duration: 1000 })
     } else {
       settlementSrc?.setData(EMPTY_FC)
     }
-  }, [ready, blockedRoadGeom, isolatedSettlements])
+  }, [ready, blockedRoads, isolatedSettlements])
 
   return <div ref={containerRef} className="w-full h-full" />
 }
