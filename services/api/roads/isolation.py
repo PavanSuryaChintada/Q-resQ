@@ -13,6 +13,7 @@ broadcast for the isolation view.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,8 @@ from config import REGION
 _API_DIR = Path(__file__).resolve().parents[1]
 
 _supabase: Client | None = None
+_isolation_cache: tuple[float, list[dict[str, Any]]] | None = None
+_ISOLATION_CACHE_TTL_S = 15.0
 
 
 def _get_supabase() -> Client:
@@ -38,7 +41,39 @@ def _get_supabase() -> Client:
     return _supabase
 
 
-def nearest_isolation_score(lat: float, lon: float) -> float:
+def fetch_settlement_isolation_scores() -> list[dict[str, Any]]:
+    """[{geom, isolation_score}, ...], cached for _ISOLATION_CACHE_TTL_S.
+
+    Fetch this ONCE per severity-recompute batch and pass it to
+    nearest_isolation_score, never call that per-request in a loop - a
+    queue of N open requests doing N live network round-trips each is
+    exactly the bug that made request intake take 2+ minutes (same class
+    of mistake as the per-cell rainfall NetCDF reopen fixed earlier today).
+
+    Isolation state only changes when a road is blocked or cleared - a
+    rare, discrete event, not something that needs a fresh read on every
+    GET /requests poll (admin polls every 4s). The TTL means a demo block
+    can take up to ~15s to show up in severity scores; routers/roads.py's
+    get_isolation() itself is not cached, so the isolation VIEW is always
+    live, only this severity input lags slightly.
+
+    Returns [] on any Supabase error rather than raising - severity must
+    never fail request intake over a network hiccup.
+    """
+    global _isolation_cache
+    now = time.monotonic()
+    if _isolation_cache is not None and now - _isolation_cache[0] < _ISOLATION_CACHE_TTL_S:
+        return _isolation_cache[1]
+    try:
+        result = _get_supabase().table("settlements").select("geom,isolation_score").execute()
+    except Exception:
+        return _isolation_cache[1] if _isolation_cache is not None else []
+    settlements = [s for s in result.data if s.get("geom")]
+    _isolation_cache = (now, settlements)
+    return settlements
+
+
+def nearest_isolation_score(lat: float, lon: float, settlements: list[dict[str, Any]] | None = None) -> float:
     """sev_isolation input for dispatch/severity.py: the nearest
     settlement's last-computed isolation_score.
 
@@ -48,14 +83,13 @@ def nearest_isolation_score(lat: float, lon: float) -> float:
     every block/clear/isolation-view request, so this is a cheap read
     of an already-fresh value, not a stale cache.
 
-    Severity must never fail a request intake over a Supabase hiccup -
-    same fallback-to-neutral contract as nearest_risk_score.
+    Pass `settlements` (from fetch_settlement_isolation_scores(), fetched
+    once outside any per-request loop) to avoid a Supabase round-trip per
+    call. Omitting it fetches fresh every time - fine for a single lookup,
+    wrong inside a loop over the whole queue.
     """
-    try:
-        result = _get_supabase().table("settlements").select("geom,isolation_score").execute()
-    except Exception:
-        return 0.0
-    settlements = [s for s in result.data if s.get("geom")]
+    if settlements is None:
+        settlements = fetch_settlement_isolation_scores()
     if not settlements:
         return 0.0
     best = min(

@@ -147,6 +147,9 @@ def _print_score_histogram(risk_score: np.ndarray) -> None:
         print(f"  [{lo:.1f}, {hi:.1f}) {count:7d} {bar}")
 
 
+_cells_memory_cache: list[dict] | None = None
+
+
 def build_risk_cells(force: bool = False) -> list[dict]:
     """Single-hazard (landslide) risk cells over the Aizawl district grid.
 
@@ -157,9 +160,20 @@ def build_risk_cells(force: bool = False) -> list[dict]:
     The trigger index (rainfall + soil moisture) is computed via
     ml/trigger.py and combined as: risk = susceptibility * trigger.
     Both components are exposed separately.
+
+    Kept in memory after the first load - nearest_risk_score() calls
+    this on every request-severity recompute, and re-reading +
+    unpickling the ~75MB, 284k-row disk cache on every single call (no
+    in-process caching at all) was adding 5-25s to every request
+    creation and every GET /requests poll.
     """
+    global _cells_memory_cache
+    if _cells_memory_cache is not None and not force:
+        return _cells_memory_cache
+
     if _CACHE_PATH.exists() and not force:
-        return list(np.load(_CACHE_PATH, allow_pickle=True))
+        _cells_memory_cache = list(np.load(_CACHE_PATH, allow_pickle=True))
+        return _cells_memory_cache
 
     terrain = _get_terrain_grid(force=force)
     lats, lons = terrain["lat"], terrain["lon"]
@@ -212,6 +226,7 @@ def build_risk_cells(force: bool = False) -> list[dict]:
 
     np.save(_CACHE_PATH, np.array(cells, dtype=object), allow_pickle=True)
     print(f"[features] computed and cached {len(cells)} risk cells at {_CACHE_PATH}")
+    _cells_memory_cache = cells
     return cells
 
 

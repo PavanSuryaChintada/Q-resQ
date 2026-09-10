@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException
 from dispatch.severity import compute_severity
 from models import RequestCreate, RequestOut, RequestPatch
 from risk.features import nearest_risk_score
-from roads.isolation import nearest_isolation_score
+from roads.isolation import fetch_settlement_isolation_scores, nearest_isolation_score
 from routers import log as log_router
 
 router = APIRouter()
@@ -37,10 +37,11 @@ def _recompute_open_severity() -> None:
     waits = {r.id: max(0.0, (now - r.created_at).total_seconds() / 60.0) for r in open_requests}
     max_people = max(r.people_count for r in open_requests)
     max_wait = max(waits.values())
+    settlements = fetch_settlement_isolation_scores()  # one fetch for the whole batch, not one per request
 
     for request in open_requests:
         area_risk = nearest_risk_score(request.location[0], request.location[1])
-        isolation = nearest_isolation_score(request.location[0], request.location[1])
+        isolation = nearest_isolation_score(request.location[0], request.location[1], settlements)
         result = compute_severity(
             people_count=request.people_count,
             category=request.category,
